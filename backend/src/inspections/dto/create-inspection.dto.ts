@@ -13,4 +13,8 @@ export class CreateInspectionDto {
   // JSON field: can be array or object, we don't validate the internal structure here
   @IsOptional()
   topics?: any;
+
+  @IsInt()
+  @IsOptional()
+  score?: number;
 }

@@ -3,6 +3,16 @@ import App from "./App.tsx";
 import "./index.css";
 import { AppProvider } from "@/contexts/AppContext";
 
+// Chrome extension / service worker noise: ignore known benign unhandledrejection
+const CHROME_EXT_NOISE =
+  "A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received";
+window.addEventListener("unhandledrejection", (event) => {
+  const msg = typeof event.reason?.message === "string" ? event.reason.message : String(event.reason ?? "");
+  if (msg.includes(CHROME_EXT_NOISE)) {
+    event.preventDefault();
+  }
+});
+
 // Unregister service workers only when explicitly disabled (e.g. dev/debug).
 // Normally we keep /service-worker.js for push notifications.
 const SHOULD_UNREGISTER_SW = import.meta.env.VITE_DISABLE_SERVICE_WORKERS === 'true';

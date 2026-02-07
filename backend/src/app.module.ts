@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { TenantContextMiddleware } from './middleware/tenant-context.middleware';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -14,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   controllers: [AppController],
+  providers: [TenantContextMiddleware],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
@@ -31,4 +33,8 @@ import { PrismaModule } from './prisma/prisma.module';
     NotificationsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantContextMiddleware).forRoutes('*');
+  }
+}

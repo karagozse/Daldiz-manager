@@ -12,7 +12,7 @@
  * - X-axis: 3 date labels with left/right padding
  * - Dots: All 3 visible, latest = circled marker (emphasized), previous = small muted
  * - Labels: Score above each dot, latest bold, others muted
- * - Data: ONLY COMPLETED evaluation scores, latest 3 points
+ * - Data: ONLY SUBMITTED evaluation scores, latest 3 points
  * 
  * USAGE:
  * - Dashboard (campus cards)
@@ -28,7 +28,7 @@ interface ScoreChartProps {
 }
 
 const ScoreChart = ({ data, height = 120 }: ScoreChartProps) => {
-  // LOCKED: Only show latest 3 COMPLETED data points
+  // LOCKED: Only show latest 3 SUBMITTED data points
   const chartData = data.slice(-3);
   const dataLength = chartData.length;
   // Son gerçek değeri olan nokta (null olan aylar atlanır) – Dashboard/Bahçeler'de son ay null olunca vurgu doğru noktada olsun

@@ -17,6 +17,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { InspectionsService } from '../inspections/inspections.service';
+import { Tenant } from '../common/decorators/tenant.decorator';
+import { TenantContext } from '../middleware/tenant-context.middleware';
 
 @Controller('gardens')
 @UseGuards(JwtAuthGuard)
@@ -32,13 +34,17 @@ export class GardensController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(Role.SUPER_ADMIN)
-  create(@Body() createGardenDto: CreateGardenDto) {
-    return this.gardensService.create(createGardenDto);
+  create(@Body() createGardenDto: CreateGardenDto, @Tenant() tenant: TenantContext) {
+    return this.gardensService.create(tenant.tenantId, createGardenDto);
   }
 
   @Get()
-  async findAll(@Query('campusId') campusId?: string, @Query('status') status?: string) {
-    const gardens = await this.gardensService.findAll(campusId, status);
+  async findAll(
+    @Query('campusId') campusId?: string,
+    @Query('status') status?: string,
+    @Tenant() tenant?: TenantContext,
+  ) {
+    const gardens = await this.gardensService.findAll(tenant!.tenantId, campusId, status);
     console.log(
       'DEBUG /gardens response sample',
       gardens.slice(0, 3).map((g: any) => ({
@@ -53,8 +59,8 @@ export class GardensController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const garden = await this.gardensService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Tenant() tenant: TenantContext) {
+    const garden = await this.gardensService.findOne(tenant.tenantId, id);
     console.log('DEBUG /gardens/:id response', {
       id: garden.id,
       name: garden.name,
@@ -66,8 +72,8 @@ export class GardensController {
   }
 
   @Get(':id/inspections')
-  findInspectionsByGardenId(@Param('id', ParseIntPipe) id: number) {
-    return this.inspectionsService.findByGardenId(id);
+  findInspectionsByGardenId(@Param('id', ParseIntPipe) id: number, @Tenant() tenant: TenantContext) {
+    return this.inspectionsService.findByGardenId(tenant.tenantId, id);
   }
 
   /**
@@ -79,7 +85,8 @@ export class GardensController {
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateGardenStatusDto: UpdateGardenStatusDto,
+    @Tenant() tenant: TenantContext,
   ) {
-    return this.gardensService.updateStatus(id, updateGardenStatusDto);
+    return this.gardensService.updateStatus(tenant.tenantId, id, updateGardenStatusDto);
   }
 }

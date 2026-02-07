@@ -193,7 +193,7 @@ export const generateCompletedCycle = (
   const cycle: InspectionCycle = {
     id: `cycle-${gardenId}-${daysAgo}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     gardenId,
-    state: "COMPLETED",
+    state: "SUBMITTED",
     consultantSubmissionDate: new Date(Date.now() - (daysAgo + 2) * 24 * 60 * 60 * 1000).toISOString(),
     evaluationDate: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
     topics,

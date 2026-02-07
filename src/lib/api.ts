@@ -138,6 +138,23 @@ function isBackendDownError(error: {
 }
 
 /**
+ * Get standard API headers (x-tenant + Authorization) for non-JSON requests (e.g. FormData upload)
+ */
+export function getApiHeaders(): Record<string, string> {
+  const tenantKey = import.meta.env.VITE_TENANT_KEY || "kral";
+  const token =
+    accessToken ||
+    (typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null);
+  const headers: Record<string, string> = {
+    "x-tenant": tenantKey,
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+/**
  * Generic API fetch fonksiyonu
  * 
  * @param path - API endpoint path'i (örn: "/auth/login", "/campuses")
@@ -171,6 +188,10 @@ export async function apiFetch<T = unknown>(
   const headers: HeadersInit = {
     ...(options.headers || {}),
   };
+
+  // Multi-tenant: always send x-tenant (default "kral" for local dev)
+  const tenantKey = import.meta.env.VITE_TENANT_KEY || "kral";
+  headers["x-tenant"] = tenantKey;
 
   // Auth token varsa Authorization header'ına ekle
   if (token) {

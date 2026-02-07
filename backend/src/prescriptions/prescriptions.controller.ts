@@ -18,6 +18,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
+import { Tenant } from '../common/decorators/tenant.decorator';
+import { TenantContext } from '../middleware/tenant-context.middleware';
 
 @Controller('prescriptions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -34,8 +36,9 @@ export class PrescriptionsController {
   create(
     @Body() createPrescriptionDto: CreatePrescriptionDto,
     @CurrentUser() user: { id: number },
+    @Tenant() tenant: TenantContext,
   ) {
-    return this.prescriptionsService.createDraft(user.id, createPrescriptionDto);
+    return this.prescriptionsService.createDraft(tenant.tenantId, user.id, createPrescriptionDto);
   }
 
   /**
@@ -49,8 +52,9 @@ export class PrescriptionsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePrescriptionDto: UpdatePrescriptionDto,
     @CurrentUser() user: { id: number },
+    @Tenant() tenant: TenantContext,
   ) {
-    return this.prescriptionsService.update(user.id, id, updatePrescriptionDto);
+    return this.prescriptionsService.update(tenant.tenantId, user.id, id, updatePrescriptionDto);
   }
 
   /**
@@ -63,8 +67,9 @@ export class PrescriptionsController {
   submitForReview(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: { id: number },
+    @Tenant() tenant: TenantContext,
   ) {
-    return this.prescriptionsService.submitForReview(user.id, id);
+    return this.prescriptionsService.submitForReview(tenant.tenantId, user.id, id);
   }
 
   /**
@@ -78,8 +83,9 @@ export class PrescriptionsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() reviewPrescriptionDto: ReviewPrescriptionDto,
     @CurrentUser() user: { id: number },
+    @Tenant() tenant: TenantContext,
   ) {
-    return this.prescriptionsService.review(user.id, id, reviewPrescriptionDto);
+    return this.prescriptionsService.review(tenant.tenantId, user.id, id, reviewPrescriptionDto);
   }
 
   /**
@@ -89,8 +95,8 @@ export class PrescriptionsController {
    */
   @Get('campus/:campusId/list')
   @Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.ADMIN, Role.SUPER_ADMIN)
-  listByCampus(@Param('campusId') campusId: string) {
-    return this.prescriptionsService.listByCampus(campusId);
+  listByCampus(@Param('campusId') campusId: string, @Tenant() tenant: TenantContext) {
+    return this.prescriptionsService.listByCampus(tenant.tenantId, campusId);
   }
 
   /**
@@ -100,8 +106,8 @@ export class PrescriptionsController {
    */
   @Get('campus/:campusId/latest')
   @Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.ADMIN, Role.SUPER_ADMIN)
-  getLatestApproved(@Param('campusId') campusId: string) {
-    return this.prescriptionsService.getLatestApprovedByCampus(campusId);
+  getLatestApproved(@Param('campusId') campusId: string, @Tenant() tenant: TenantContext) {
+    return this.prescriptionsService.getLatestApprovedByCampus(tenant.tenantId, campusId);
   }
 
   /**
@@ -111,8 +117,8 @@ export class PrescriptionsController {
    */
   @Get('pending')
   @Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.SUPER_ADMIN)
-  listPending() {
-    return this.prescriptionsService.listPending();
+  listPending(@Tenant() tenant: TenantContext) {
+    return this.prescriptionsService.listPending(tenant.tenantId);
   }
 
   /**
@@ -122,8 +128,8 @@ export class PrescriptionsController {
    */
   @Get('campus/:campusId/pending')
   @Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.ADMIN, Role.SUPER_ADMIN)
-  listPendingByCampus(@Param('campusId') campusId: string) {
-    return this.prescriptionsService.listPendingByCampus(campusId);
+  listPendingByCampus(@Param('campusId') campusId: string, @Tenant() tenant: TenantContext) {
+    return this.prescriptionsService.listPendingByCampus(tenant.tenantId, campusId);
   }
 
   /**
@@ -133,8 +139,8 @@ export class PrescriptionsController {
    */
   @Get(':id')
   @Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.ADMIN, Role.SUPER_ADMIN)
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.prescriptionsService.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Tenant() tenant: TenantContext) {
+    return this.prescriptionsService.findOne(tenant.tenantId, id);
   }
 
   /**
@@ -147,7 +153,8 @@ export class PrescriptionsController {
   delete(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: { id: number; role: string },
+    @Tenant() tenant: TenantContext,
   ) {
-    return this.prescriptionsService.delete(user.id, id, user.role);
+    return this.prescriptionsService.delete(tenant.tenantId, user.id, id, user.role);
   }
 }

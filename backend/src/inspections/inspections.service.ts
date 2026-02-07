@@ -12,10 +12,10 @@ export class InspectionsService {
     private notificationsService: NotificationsService,
   ) {}
 
-  async create(createInspectionDto: CreateInspectionDto, createdById: number) {
-    // Verify garden exists
-    const garden = await this.prisma.garden.findUnique({
-      where: { id: createInspectionDto.gardenId },
+  async create(createInspectionDto: CreateInspectionDto, createdById: number, tenantId: string) {
+    // Verify garden exists for tenant
+    const garden = await this.prisma.garden.findFirst({
+      where: { id: createInspectionDto.gardenId, tenantId },
     });
 
     if (!garden) {
@@ -26,10 +26,12 @@ export class InspectionsService {
 
     return this.prisma.inspection.create({
       data: {
+        tenantId,
         gardenId: createInspectionDto.gardenId,
         createdById,
         status: createInspectionDto.status ?? InspectionStatus.DRAFT,
         topics: createInspectionDto.topics ?? null,
+        score: createInspectionDto.score ?? null,
       },
       include: {
         garden: {
@@ -49,9 +51,9 @@ export class InspectionsService {
     });
   }
 
-  async findOne(id: string) {
-    const inspection = await this.prisma.inspection.findUnique({
-      where: { id },
+  async findOne(tenantId: string, id: string) {
+    const inspection = await this.prisma.inspection.findFirst({
+      where: { id, tenantId },
       include: {
         garden: {
           include: {
@@ -76,8 +78,9 @@ export class InspectionsService {
     return inspection;
   }
 
-  async findAll() {
+  async findAll(tenantId: string) {
     return this.prisma.inspection.findMany({
+      where: { tenantId },
       include: {
         garden: {
           include: {
@@ -99,10 +102,10 @@ export class InspectionsService {
     });
   }
 
-  async findByGardenId(gardenId: number) {
-    // Verify garden exists
-    const garden = await this.prisma.garden.findUnique({
-      where: { id: gardenId },
+  async findByGardenId(tenantId: string, gardenId: number) {
+    // Verify garden exists for tenant
+    const garden = await this.prisma.garden.findFirst({
+      where: { id: gardenId, tenantId },
     });
 
     if (!garden) {
@@ -110,7 +113,7 @@ export class InspectionsService {
     }
 
     return this.prisma.inspection.findMany({
-      where: { gardenId },
+      where: { gardenId, tenantId },
       include: {
         garden: {
           include: {
@@ -132,23 +135,27 @@ export class InspectionsService {
     });
   }
 
-  async update(id: string, updateInspectionDto: UpdateInspectionDto) {
-    // Verify inspection exists
-    const inspection = await this.prisma.inspection.findUnique({
-      where: { id },
+  async update(tenantId: string, id: string, updateInspectionDto: UpdateInspectionDto) {
+    // Verify inspection exists for tenant
+    const inspection = await this.prisma.inspection.findFirst({
+      where: { id, tenantId },
     });
 
     if (!inspection) {
       throw new NotFoundException(`Inspection with ID ${id} not found`);
     }
 
-    // Check if status is being changed to SCORED (evaluation completed)
-    const isBeingScored = updateInspectionDto.status === InspectionStatus.SCORED && 
-                          inspection.status !== InspectionStatus.SCORED;
+    const isBeingCompleted = updateInspectionDto.status === InspectionStatus.SUBMITTED &&
+      inspection.status !== InspectionStatus.SUBMITTED;
+
+    const updateData: any = { ...updateInspectionDto };
+    if (isBeingCompleted) {
+      updateData.submittedAt = new Date();
+    }
 
     const updatedInspection = await this.prisma.inspection.update({
       where: { id },
-      data: updateInspectionDto,
+      data: updateData,
       include: {
         garden: {
           include: {
@@ -166,8 +173,7 @@ export class InspectionsService {
       },
     });
 
-    // Verify status is actually SCORED before sending notification
-    if (isBeingScored && updatedInspection.status === InspectionStatus.SCORED) {
+    if (isBeingCompleted && updatedInspection.status === InspectionStatus.SUBMITTED) {
       // Send web push notification after successful scoring (non-blocking)
       // Errors are handled inside the notification service and never thrown
       console.log('INSPECTION_UPDATE: calling notifyEvaluationCompleted', {
@@ -189,9 +195,9 @@ export class InspectionsService {
     return updatedInspection;
   }
 
-  async delete(id: string, userId?: number, userRole?: string) {
-    const inspection = await this.prisma.inspection.findUnique({
-      where: { id },
+  async delete(tenantId: string, id: string, userId?: number, userRole?: string) {
+    const inspection = await this.prisma.inspection.findFirst({
+      where: { id, tenantId },
     });
 
     if (!inspection) {
@@ -205,6 +211,10 @@ export class InspectionsService {
       if (inspection.status !== InspectionStatus.DRAFT) {
         throw new BadRequestException('Only draft inspections can be deleted');
       }
+    }
+
+    if (inspection.status === InspectionStatus.SUBMITTED) {
+      throw new BadRequestException('Submitted inspections cannot be deleted');
     }
 
     await this.prisma.inspection.delete({

@@ -39,10 +39,10 @@ const Dashboard = () => {
     { id: "manavgat", name: "Manavgat Kampüsü", weight: CAMPUS_WEIGHTS.manavgat },
   ];
   
-  // Helper: Backend'den bahçe için en son SCORED inspection tarihini al
+  // Helper: Backend'den bahçe için en son SUBMITTED inspection tarihini al
   const getLatestEvaluationDateForGarden = (gardenId: number): string | null => {
     const gardenInspections = inspections
-      .filter(i => i.gardenId === gardenId && i.status === "SCORED" && typeof i.score === "number")
+      .filter(i => i.gardenId === gardenId && i.status === "SUBMITTED" && typeof i.score === "number")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
     return gardenInspections.length > 0 ? gardenInspections[0].createdAt : null;
@@ -66,7 +66,7 @@ const Dashboard = () => {
     });
     
     // Use the new calculateCampusScore function (average of garden scores)
-    // Sadece backend SCORED inspections kullanılır
+    // Sadece backend SUBMITTED inspections kullanılır
     // KRİTİK: Değerlendirilmemiş bahçeler ortalamaya dahil edilmez
     const campusScore = calculateCampusScore(campus.id, gardens, getLatestBackendScoreForGarden);
     
@@ -93,7 +93,7 @@ const Dashboard = () => {
   });
   
   // Use new calculateGeneralScore function (weighted campus scores: Belek 60%, Çandır 20%, Manavgat 20%)
-  // Sadece backend SCORED inspections kullanılır
+  // Sadece backend SUBMITTED inspections kullanılır
   // KRİTİK: Değerlendirilmemiş kampüsler ortalamaya dahil edilmez
   const overallScoreRaw = calculateGeneralScore(gardens, getLatestBackendScoreForGarden);
   
@@ -102,9 +102,9 @@ const Dashboard = () => {
   
   const interpretation = getScoreInterpretation(overallScore);
 
-  // Tüm SCORED inspections (scoreHistory için)
+  // Tüm SUBMITTED inspections (scoreHistory için)
   const scoredInspections: ScoredEntry[] = inspections
-    .filter(i => i.status === "SCORED" && typeof i.score === "number")
+    .filter(i => i.status === "SUBMITTED" && typeof i.score === "number")
     .map(i => {
       const garden = gardens.find(g => g.id === i.gardenId);
       return {

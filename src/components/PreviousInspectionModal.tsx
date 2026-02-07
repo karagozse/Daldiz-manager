@@ -97,7 +97,7 @@ const PreviousInspectionModal = ({
   const inspectionData = {
     id: inspection.id,
     gardenId: inspection.gardenId,
-    state: inspection.status === "SCORED" ? "COMPLETED" as const : "DRAFT" as const,
+    state: inspection.status === "SUBMITTED" ? "SUBMITTED" as const : "DRAFT" as const,
     topics: (inspection.topics as TopicInspection[]) || [],
     gardenScore: inspection.score || undefined,
     evaluationDate: inspection.createdAt,

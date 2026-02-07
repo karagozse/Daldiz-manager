@@ -11,10 +11,10 @@ export class GardensService {
     private criticalWarningsService: CriticalWarningsService,
   ) {}
 
-  async create(createGardenDto: CreateGardenDto) {
-    // Verify campus exists
+  async create(tenantId: string, createGardenDto: CreateGardenDto) {
+    // Verify campus exists for tenant
     const campus = await this.prisma.campus.findUnique({
-      where: { id: createGardenDto.campusId },
+      where: { tenantId_id: { tenantId, id: createGardenDto.campusId } },
     });
 
     if (!campus) {
@@ -23,7 +23,9 @@ export class GardensService {
 
     return this.prisma.garden.create({
       data: {
+        tenantId,
         name: createGardenDto.name,
+        campusTenantId: tenantId,
         campusId: createGardenDto.campusId,
         status: 'ACTIVE',
       },
@@ -33,8 +35,8 @@ export class GardensService {
     });
   }
 
-  async findAll(campusId?: string, status?: string) {
-    const where: any = {};
+  async findAll(tenantId: string, campusId?: string, status?: string) {
+    const where: any = { tenantId };
     if (campusId) {
       where.campusId = campusId;
     }
@@ -51,11 +53,12 @@ export class GardensService {
       orderBy: { id: 'asc' },
     });
 
-    // Aggregate open critical warnings by gardenId using groupBy
+    // Aggregate open critical warnings by gardenId (tenant-scoped)
     const openWarningCounts = await this.prisma.criticalWarning.groupBy({
       by: ['gardenId'],
       where: {
         status: 'OPEN',
+        garden: { tenantId },
       },
       _count: {
         _all: true,
@@ -75,9 +78,9 @@ export class GardensService {
     }));
   }
 
-  async findOne(id: number) {
-    const garden = await this.prisma.garden.findUnique({
-      where: { id },
+  async findOne(tenantId: string, id: number) {
+    const garden = await this.prisma.garden.findFirst({
+      where: { id, tenantId },
       include: {
         campus: true,
       },
@@ -87,11 +90,11 @@ export class GardensService {
       throw new NotFoundException(`Garden with ID ${id} not found`);
     }
 
-    // Compute open critical warning count explicitly
     const openCriticalWarningCount = await this.prisma.criticalWarning.count({
       where: {
         gardenId: garden.id,
         status: 'OPEN',
+        garden: { tenantId },
       },
     });
 
@@ -101,8 +104,8 @@ export class GardensService {
     };
   }
 
-  async updateStatus(id: number, updateGardenStatusDto: UpdateGardenStatusDto) {
-    const garden = await this.findOne(id);
+  async updateStatus(tenantId: string, id: number, updateGardenStatusDto: UpdateGardenStatusDto) {
+    const garden = await this.findOne(tenantId, id);
 
     return this.prisma.garden.update({
       where: { id },

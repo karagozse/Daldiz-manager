@@ -85,23 +85,20 @@ const GardenDetail = () => {
   // Backend inspections'ları kullanarak draft/pending/completed belirle
   const gardenInspections = inspections.filter(i => i.gardenId === gardenId);
   
-  // SUBMITTED/REVIEW inspection - bekleyen değerlendirme
-  const backendPending = gardenInspections.find(i => i.status === "SUBMITTED" || i.status === "REVIEW");
+  // Single-layer flow: no separate pending evaluation
+  const backendPending = null;
   
-  // SCORED inspections - tamamlanmış değerlendirmeler (createdAt DESC - newest first)
+  // SUBMITTED inspections - tamamlanmış değerlendirmeler (createdAt DESC - newest first)
   const backendScored = gardenInspections
-    .filter(i => i.status === "SCORED" && typeof i.score === "number")
+    .filter(i => i.status === "SUBMITTED" && typeof i.score === "number")
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   
-  // Latest and previous SCORED inspections
+  // Latest and previous SUBMITTED inspections
   const latestScored = backendScored[0] || null;
   const previousScored = backendScored[1] || null;
   
   // DRAFT inspection - taslak denetim
-  // Backend'de SUBMITTED/REVIEW inspection varsa DRAFT gösterme
-  const backendDraft = backendPending 
-    ? null 
-    : gardenInspections.find(i => i.status === "DRAFT");
+  const backendDraft = gardenInspections.find(i => i.status === "DRAFT");
   
   // Bekleyen değerlendirme var mı kontrol et
   const hasPendingEvaluation = !!backendPending;
@@ -155,29 +152,13 @@ const GardenDetail = () => {
   };
 
   const handleContinueDraft = () => {
-    // Backend'de SUBMITTED/REVIEW inspection varsa draft'a gitme
-    if (backendPending) {
-      handleEvaluate();
-      return;
-    }
-    
-    // Backend draft'ı kullan
     if (backendDraft) {
       navigate(`/bahce/${gardenId}/denetim`);
     }
   };
 
-  const handleEvaluate = () => {
-    // Backend pending inspection'ı kullan
-    if (backendPending) {
-      // Navigate to evaluation form with inspectionId in route
-      navigate(`/bahce/${gardenId}/degerlendirme/${backendPending.id}`);
-    }
-    // Eğer backendPending yoksa, hasPendingEvaluation false olacak ve kart görünmeyecek
-  };
-
   const handleViewPreviousInspection = () => {
-    // Latest SCORED inspection'ı göster in modal
+    // Latest SUBMITTED inspection'ı göster in modal
     if (latestScored) {
       setPreviousInspectionForModal(latestScored);
       setShowPreviousInspectionModal(true);
@@ -328,10 +309,10 @@ const GardenDetail = () => {
           <h3 className="text-base font-semibold text-foreground mb-3">Denetim Konuları</h3>
           <div className="space-y-3">
             {INSPECTION_TOPICS.map((topic) => {
-              // Öncelik: 1) Latest SCORED inspection topics, 2) SUBMITTED inspection topics
+              // Latest SUBMITTED inspection topics
               let latestData = null;
               
-              // 1. Latest SCORED inspection'dan topics verilerini al
+              // 1. Latest SUBMITTED inspection'dan topics verilerini al
               if (latestScored && latestScored.topics) {
                 const backendTopic = latestScored.topics.find((t: any) => t.topicId === topic.id);
                 if (backendTopic) {
@@ -344,18 +325,6 @@ const GardenDetail = () => {
                 }
               }
               
-              // 2. SCORED yoksa SUBMITTED inspection'dan al
-              if (!latestData && backendPending && backendPending.topics) {
-                const backendTopic = backendPending.topics.find((t: any) => t.topicId === topic.id);
-                if (backendTopic) {
-                  latestData = {
-                    status: backendTopic.status,
-                    note: backendTopic.note || undefined,
-                    photoUrl: backendTopic.photoUrl || undefined,
-                    score: backendTopic.score || undefined,
-                  };
-                }
-              }
               
               // Get topic-level warning count from loaded openWarnings
               const topicWarningCount = getTopicWarningCount(topic.id);
@@ -378,7 +347,7 @@ const GardenDetail = () => {
           </div>
         </div>
 
-        {/* Previous Inspection - Sadece 2+ SCORED inspection varsa göster */}
+        {/* Previous Inspection - Sadece 2+ SUBMITTED inspection varsa göster */}
         {previousScored && (() => {
           // Calculate open critical warnings for this previous inspection
           // Filter warnings that belong to this inspection's garden and are still open

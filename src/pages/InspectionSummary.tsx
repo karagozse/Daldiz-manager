@@ -57,7 +57,7 @@ const InspectionSummary = () => {
   const inspection = backendInspection ? {
     id: backendInspection.id,
     gardenId: backendInspection.gardenId,
-    state: backendInspection.status === "SCORED" ? "COMPLETED" as const : "DRAFT" as const,
+    state: backendInspection.status === "SUBMITTED" ? "SUBMITTED" as const : "DRAFT" as const,
     topics: (backendInspection.topics as TopicInspection[]) || [],
     gardenScore: backendInspection.score || undefined,
     evaluationDate: backendInspection.createdAt, // Use createdAt as evaluation date

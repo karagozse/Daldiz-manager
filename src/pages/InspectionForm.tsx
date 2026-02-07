@@ -1,18 +1,18 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useApp, INSPECTION_TOPICS, TopicInspection, InspectionCycle, TopicStatus, CriticalWarning, InspectionState, BackendInspection } from "@/contexts/AppContext";
+import { useApp, INSPECTION_TOPICS, TopicInspection, InspectionCycle, TopicStatus, CriticalWarning, InspectionState, BackendInspection, calculateGardenScore } from "@/contexts/AppContext";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import CriticalWarningsModal from "@/components/CriticalWarningsModal";
 import CriticalWarningCard from "@/components/CriticalWarningCard";
 import { PhotoThumbnail } from "@/components/PhotoThumbnail";
 import { getPhotoUrl } from "@/lib/photoUtils";
 import { apiBaseUrl } from "@/config/env";
-import { fetchCriticalWarningsForGarden } from "@/lib/criticalWarnings";
+import { fetchCriticalWarningsForGarden, createCriticalWarning, updateCriticalWarning } from "@/lib/criticalWarnings";
 import { compressImageToJpeg } from "@/lib/imageUtils";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiHeaders } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { mapBackendRoleToSemantic, can } from "@/lib/permissions";
-import { CheckCircle2, Circle, Camera, ChevronRight, Save, Send, X, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, ChevronRight, Save, Send, X, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -22,6 +22,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import TopicScoreCircle from "@/components/TopicScoreCircle";
+
+const SCORE_OPTIONS = [0, 25, 50, 75, 100];
 
 const statusOptions: { value: TopicStatus; label: string; className: string }[] = [
   { value: "uygun", label: "Uygun", className: "bg-success/10 text-success border-success/30" },
@@ -103,6 +107,7 @@ const InspectionForm = () => {
     createInspection,
     deleteInspection,
     loadInspectionsForGarden,
+    loadGardens,
     currentUser
   } = useApp();
   
@@ -139,6 +144,15 @@ const InspectionForm = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [topicNote, setTopicNote] = useState("");
   const [topicStatus, setTopicStatus] = useState<TopicStatus>("not_started");
+  const [topicScore, setTopicScore] = useState<number | null>(null);
+  
+  // Critical warning dialogs
+  const [isWarningDialogOpen, setIsWarningDialogOpen] = useState(false);
+  const [warningTitle, setWarningTitle] = useState("");
+  const [warningDescription, setWarningDescription] = useState("");
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [selectedWarning, setSelectedWarning] = useState<CriticalWarning | null>(null);
+  const [closureNote, setClosureNote] = useState("");
   
   // File input ref for photo upload
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -314,9 +328,17 @@ const InspectionForm = () => {
   const handleTopicClick = (topic: TopicInspection) => {
     setSelectedTopic(topic);
     setTopicNote(topic.note || "");
-    // Ensure status defaults to "not_started" if undefined/null
     setTopicStatus(topic.status || "not_started");
+    setTopicScore(typeof topic.score === "number" ? topic.score : null);
     setIsDialogOpen(true);
+  };
+
+  // Previous score from last completed inspection
+  const previousCycle = completedCycles[0];
+  const getPreviousScore = (topicId: number): number | null => {
+    if (!previousCycle) return null;
+    const prevTopic = previousCycle.topics.find(t => t.topicId === topicId);
+    return prevTopic?.score ?? null;
   };
 
   // Get warnings for a specific topic (for displaying in topic dialog)
@@ -377,16 +399,12 @@ const InspectionForm = () => {
       formData.append("file", compressedFile);
 
       // Upload to backend - use fetch directly to avoid Content-Type header override
-      // Use centralized apiBaseUrl which automatically resolves based on hostname
-      const token = localStorage.getItem('accessToken');
+      // Use getApiHeaders for x-tenant + Authorization (do NOT set Content-Type for FormData)
       const uploadResponse = await fetch(
         `${apiBaseUrl}/uploads/inspection-photo/${inspectionId}/${selectedTopic.topicId}`,
         {
           method: "POST",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            // Don't set Content-Type - browser will set it with boundary for FormData
-          },
+          headers: getApiHeaders(),
           body: formData,
         }
       );
@@ -448,6 +466,82 @@ const InspectionForm = () => {
     fileInputRef.current?.click();
   };
 
+  /** Ensure we have a backend draft for operations that require inspectionId (e.g. photo upload, critical warning) */
+  const ensureDraftExists = useCallback(async (): Promise<string> => {
+    if (backendDraft?.id) return backendDraft.id;
+    const topicsPayload = topics.map(t => ({
+      topicId: t.topicId,
+      topicName: t.topicName,
+      status: t.status,
+      note: t.note || null,
+      photoUrl: t.photoUrl || null,
+      score: t.score ?? null,
+    }));
+    const newDraft = await createInspection(gardenId, { status: "DRAFT", topics: topicsPayload });
+    setBackendDraft(newDraft);
+    await loadInspectionsForGarden(gardenId);
+    return newDraft.id;
+  }, [backendDraft?.id, topics, gardenId, createInspection, loadInspectionsForGarden]);
+
+  const handleAddWarning = async () => {
+    if (!warningTitle?.trim() || !warningDescription?.trim() || !selectedTopic) return;
+    const topicId = selectedTopic.topicId;
+    try {
+      const inspectionId = await ensureDraftExists();
+      const created = await createCriticalWarning(inspectionId, {
+        topicId,
+        title: warningTitle.trim(),
+        description: warningDescription.trim(),
+        severity: "HIGH",
+      });
+      setWarnings(prev => [...prev, created]);
+      setWarningTitle("");
+      setWarningDescription("");
+      setIsWarningDialogOpen(false);
+      setHasUnsavedChanges(true);
+      await loadGardens(); // Bahçe/kampüs kartlarındaki badge güncellensin
+      toast({ title: "Kritik uyarı eklendi", duration: 2500 });
+    } catch (e) {
+      console.error("Add warning error:", e);
+      toast({
+        title: "Hata",
+        description: "Kritik uyarı eklenirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCloseWarning = async () => {
+    if (!closureNote?.trim() || !selectedWarning) {
+      toast({ title: "Kapanış notu zorunlu", variant: "destructive" });
+      return;
+    }
+    if (String(selectedWarning.id).startsWith("warning-")) {
+      toast({ title: "Bu uyarı henüz kaydedilmedi.", variant: "destructive" });
+      return;
+    }
+    try {
+      const updated = await updateCriticalWarning(selectedWarning.id, {
+        status: "CLOSED",
+        closureNote: closureNote.trim(),
+      });
+      setWarnings(prev => prev.map(w => w.id === selectedWarning.id ? updated : w));
+      setIsCloseDialogOpen(false);
+      setSelectedWarning(null);
+      setClosureNote("");
+      setHasUnsavedChanges(true);
+      await loadGardens(); // Bahçe/kampüs kartlarındaki badge güncellensin
+      toast({ title: "Kritik uyarı kapatıldı" });
+    } catch (e) {
+      console.error("Close warning error:", e);
+      toast({
+        title: "Hata",
+        description: "Kritik uyarı kapatılırken bir hata oluştu.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Handle photo deletion
   // IMPORTANT: This ONLY updates local state. The photo removal will be persisted when user presses "Kaydet" or "Gönder".
   const handleDeletePhoto = () => {
@@ -499,15 +593,14 @@ const InspectionForm = () => {
     }
 
     if (selectedTopic) {
-      // Only update local topics state - no backend API calls
-      // Include status, note, and photoUrl from selectedTopic
       setTopics(prev => prev.map(t => {
         if (t.topicId === selectedTopic.topicId) {
           return {
             ...t,
             note: topicNote.trim() || "",
-            status: topicStatus, // Use selected status directly
-            photoUrl: selectedTopic.photoUrl || t.photoUrl, // Preserve photoUrl from selectedTopic or keep existing
+            status: topicStatus,
+            photoUrl: selectedTopic.photoUrl || t.photoUrl,
+            score: topicScore ?? undefined,
           };
         }
         return t;
@@ -597,13 +690,12 @@ const InspectionForm = () => {
   };
 
   const submitForReview = async () => {
-    if (isSavingDraft || isSubmitting) return; // Prevent conflicts
+    if (isSavingDraft || isSubmitting) return;
     
-    // Validate: All topics must have a status
     if (!allTopicsHaveStatus(topics)) {
       toast({
         title: "Eksik konular var",
-        description: "Tüm denetim konuları için durum seçilmeden form kaydedilemez.",
+        description: "Tüm denetim konuları için durum seçilmeden form gönderilemez.",
         variant: "destructive",
         duration: 4500,
       });
@@ -613,7 +705,6 @@ const InspectionForm = () => {
     try {
       setIsSubmitting(true);
       
-      // Build topics payload from current topics state
       const topicsPayload = topics.map(t => ({
         topicId: t.topicId,
         topicName: t.topicName,
@@ -623,29 +714,29 @@ const InspectionForm = () => {
         score: t.score ?? null,
       }));
 
+      const gardenScore = Math.round(calculateGardenScore(topicsPayload as TopicInspection[]));
+
       if (backendDraft) {
-        // There is already a DRAFT for this consultant+garden
         await updateInspection(backendDraft.id, {
           status: "SUBMITTED",
           topics: topicsPayload,
+          score: gardenScore,
         });
       } else {
-        // No draft yet: create a brand new inspection as SUBMITTED
         await createInspection(gardenId, {
           status: "SUBMITTED",
           topics: topicsPayload,
+          score: gardenScore,
         });
       }
 
-      // Reload inspections to get updated state
       await loadInspectionsForGarden(gardenId);
       
       toast({
         title: "Denetim gönderildi",
-        description: "Denetim değerlendirme için gönderildi.",
+        description: "Denetim tamamlandı.",
       });
       
-      // Clear unsaved changes flag and navigate back to garden detail directly
       setHasUnsavedChanges(false);
       navigate(`/bahce/${gardenId}`);
     } catch (e) {
@@ -780,6 +871,9 @@ const InspectionForm = () => {
                       }`}>
                         {getStatusLabel(topic.status)}
                       </span>
+                    )}
+                    {typeof topic.score === "number" && (
+                      <TopicScoreCircle score={topic.score} />
                     )}
                   </div>
                 </div>
@@ -964,37 +1058,85 @@ const InspectionForm = () => {
               )}
             </div>
 
-            {/* Critical Warnings - Read-only list */}
-            {selectedTopic && (() => {
-              const topicWarnings = getTopicWarnings(selectedTopic.topicId);
-              if (topicWarnings.length === 0) return null;
-              
-              return (
-                <div className="mt-4 space-y-2">
-                  <p className="text-sm font-medium text-foreground">Kritik Uyarılar</p>
-                  <div className="space-y-3">
-                    {topicWarnings.map(warning => (
-                      <CriticalWarningCard
-                        key={warning.id}
-                        id={warning.id}
-                        title={warning.title}
-                        description={warning.description}
-                        status={warning.status}
-                        topicId={warning.topicId}
-                        openedDate={warning.openedDate}
-                        closedDate={warning.closedDate}
-                        closureNote={warning.closureNote}
-                        gardenId={gardenId}
-                        gardenName={garden?.name}
-                        campusName={garden?.campusName}
-                        mode="evaluation"
-                        showActions={false}
-                      />
-                    ))}
-                  </div>
+            {/* Score Section */}
+            {selectedTopic && (
+              <div className="mt-4">
+                <p className="text-sm font-medium text-foreground mb-3">Puan</p>
+                <div className="flex gap-2 mb-2">
+                  {SCORE_OPTIONS.map((scoreOption) => (
+                    <button
+                      key={scoreOption}
+                      onClick={() => setTopicScore(scoreOption)}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        topicScore === scoreOption
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                      aria-pressed={topicScore === scoreOption}
+                      aria-label={`Skor: ${scoreOption}`}
+                    >
+                      {scoreOption}
+                    </button>
+                  ))}
                 </div>
-              );
-            })()}
+                {(() => {
+                  const prevScore = getPreviousScore(selectedTopic.topicId);
+                  return (
+                    <p className="text-xs text-muted-foreground">
+                      {prevScore !== null ? `Önceki değerlendirme skoru: ${prevScore} puan` : "Önceki değerlendirme yok"}
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Critical Warnings - Add/Close */}
+            {selectedTopic && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-foreground">Kritik Uyarılar</p>
+                  <button
+                    onClick={() => setIsWarningDialogOpen(true)}
+                    className="text-xs text-primary flex items-center gap-1"
+                    aria-label={`${selectedTopic.topicName} konusu için kritik uyarı ekle`}
+                  >
+                    <Plus size={14} />
+                    Ekle
+                  </button>
+                </div>
+                {(() => {
+                  const topicWarnings = getTopicWarnings(selectedTopic.topicId);
+                  if (topicWarnings.length === 0) {
+                    return <p className="text-sm text-muted-foreground">Açık kritik uyarı yok</p>;
+                  }
+                  return (
+                    <div className="space-y-3">
+                      {topicWarnings.map(warning => (
+                        <CriticalWarningCard
+                          key={warning.id}
+                          id={warning.id}
+                          title={warning.title}
+                          description={warning.description}
+                          status={warning.status}
+                          topicId={warning.topicId}
+                          openedDate={warning.openedDate}
+                          closedDate={warning.closedDate}
+                          closureNote={warning.closureNote}
+                          gardenId={gardenId}
+                          gardenName={garden?.name}
+                          campusName={garden?.campusName}
+                          mode="evaluation"
+                          onClose={warning.status === "OPEN" ? () => {
+                            setSelectedWarning(warning);
+                            setIsCloseDialogOpen(true);
+                          } : undefined}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
             
             <button
               onClick={handleSaveTopic}
@@ -1006,6 +1148,73 @@ const InspectionForm = () => {
           </div>
         </DialogContent>
         </Dialog>
+
+      {/* Add Warning Dialog */}
+      <Dialog open={isWarningDialogOpen} onOpenChange={setIsWarningDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kritik Uyarı Ekle</DialogTitle>
+            <DialogDescription className="sr-only">
+              Yeni bir kritik uyarı eklemek için başlık ve açıklama girin.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label htmlFor="warningTitle" className="text-sm font-medium text-foreground mb-2 block">Başlık *</label>
+              <Input
+                id="warningTitle"
+                value={warningTitle}
+                onChange={(e) => setWarningTitle(e.target.value)}
+                placeholder="Uyarı başlığı"
+              />
+            </div>
+            <div>
+              <label htmlFor="warningDescription" className="text-sm font-medium text-foreground mb-2 block">Açıklama *</label>
+              <Textarea
+                id="warningDescription"
+                value={warningDescription}
+                onChange={(e) => setWarningDescription(e.target.value)}
+                placeholder="Detaylı açıklama..."
+                rows={3}
+              />
+            </div>
+            <button onClick={handleAddWarning} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium">
+              Kaydet
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close Warning Dialog */}
+      <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kritik Uyarıyı Kapat</DialogTitle>
+            <DialogDescription>Bu uyarıyı kapatmak için bir kapanış notu girin.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {selectedWarning && (
+              <div className="bg-muted/50 rounded-xl p-3">
+                <p className="font-medium text-foreground">{selectedWarning.title}</p>
+                <p className="text-sm text-muted-foreground">{selectedWarning.description}</p>
+              </div>
+            )}
+            <div>
+              <label htmlFor="closureNote" className="text-sm font-medium text-foreground mb-2 block">Kapanış Notu *</label>
+              <Textarea
+                id="closureNote"
+                value={closureNote}
+                onChange={(e) => setClosureNote(e.target.value)}
+                placeholder="Nasıl çözüldüğünü açıklayın..."
+                rows={3}
+              />
+            </div>
+            <button onClick={handleCloseWarning} className="w-full py-3 bg-success text-success-foreground rounded-xl font-medium">
+              Kapat
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Photo viewer modal */}
       <Dialog

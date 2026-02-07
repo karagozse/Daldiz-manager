@@ -15,10 +15,10 @@ export class PrescriptionsService {
   /**
    * Create a new prescription (directly PENDING, no draft)
    */
-  async createDraft(userId: number, dto: CreatePrescriptionDto) {
-    // Verify campus exists
+  async createDraft(tenantId: string, userId: number, dto: CreatePrescriptionDto) {
+    // Verify campus exists for tenant
     const campus = await this.prisma.campus.findUnique({
-      where: { id: dto.campusId },
+      where: { tenantId_id: { tenantId, id: dto.campusId } },
     });
 
     if (!campus) {
@@ -27,6 +27,8 @@ export class PrescriptionsService {
 
     return this.prisma.prescription.create({
       data: {
+        tenantId,
+        campusTenantId: tenantId,
         campusId: dto.campusId,
         createdById: userId,
         ventilation: dto.ventilation ?? null,
@@ -59,9 +61,9 @@ export class PrescriptionsService {
   /**
    * Update prescription (only draft or rejected can be updated)
    */
-  async update(userId: number, id: number, dto: UpdatePrescriptionDto) {
-    const prescription = await this.prisma.prescription.findUnique({
-      where: { id },
+  async update(tenantId: string, userId: number, id: number, dto: UpdatePrescriptionDto) {
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id, tenantId },
     });
 
     if (!prescription) {
@@ -110,9 +112,9 @@ export class PrescriptionsService {
   /**
    * Submit prescription for review (draft -> pending)
    */
-  async submitForReview(userId: number, id: number) {
-    const prescription = await this.prisma.prescription.findUnique({
-      where: { id },
+  async submitForReview(tenantId: string, userId: number, id: number) {
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id, tenantId },
     });
 
     if (!prescription) {
@@ -158,9 +160,9 @@ export class PrescriptionsService {
   /**
    * Review prescription (pending -> approved or deleted)
    */
-  async review(userId: number, id: number, dto: ReviewPrescriptionDto) {
-    const prescription = await this.prisma.prescription.findUnique({
-      where: { id },
+  async review(tenantId: string, userId: number, id: number, dto: ReviewPrescriptionDto) {
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id, tenantId },
     });
 
     if (!prescription) {
@@ -244,10 +246,12 @@ export class PrescriptionsService {
   /**
    * Get latest approved prescription for a campus
    */
-  async getLatestApprovedByCampus(campusId: string) {
+  async getLatestApprovedByCampus(tenantId: string, campusId: string) {
     try {
       const prescription = await this.prisma.prescription.findFirst({
         where: {
+          tenantId,
+          campusTenantId: tenantId,
           campusId,
           status: 'approved',
         },
@@ -286,10 +290,12 @@ export class PrescriptionsService {
   /**
    * List all prescriptions for a campus
    */
-  async listByCampus(campusId: string) {
+  async listByCampus(tenantId: string, campusId: string) {
     try {
       return await this.prisma.prescription.findMany({
         where: {
+          tenantId,
+          campusTenantId: tenantId,
           campusId,
         },
         orderBy: {
@@ -324,9 +330,10 @@ export class PrescriptionsService {
   /**
    * List pending prescriptions for reviewer
    */
-  async listPending() {
+  async listPending(tenantId: string) {
     return this.prisma.prescription.findMany({
       where: {
+        tenantId,
         status: 'pending',
       },
       orderBy: {
@@ -349,9 +356,11 @@ export class PrescriptionsService {
   /**
    * List pending prescriptions for a specific campus
    */
-  async listPendingByCampus(campusId: string) {
+  async listPendingByCampus(tenantId: string, campusId: string) {
     return this.prisma.prescription.findMany({
       where: {
+        tenantId,
+        campusTenantId: tenantId,
         campusId,
         status: 'pending',
       },
@@ -375,9 +384,9 @@ export class PrescriptionsService {
   /**
    * Get prescription by ID
    */
-  async findOne(id: number) {
-    const prescription = await this.prisma.prescription.findUnique({
-      where: { id },
+  async findOne(tenantId: string, id: number) {
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id, tenantId },
       include: {
         users_prescriptions_createdByIdTousers: {
           select: {
@@ -411,9 +420,9 @@ export class PrescriptionsService {
    * - Consultant can delete DRAFT prescriptions (legacy support)
    * - Auditor/Admin can delete PENDING prescriptions
    */
-  async delete(userId: number, id: number, userRole?: string) {
-    const prescription = await this.prisma.prescription.findUnique({
-      where: { id },
+  async delete(tenantId: string, userId: number, id: number, userRole?: string) {
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id, tenantId },
     });
 
     if (!prescription) {

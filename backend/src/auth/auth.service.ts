@@ -27,8 +27,12 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(username: string, password: string): Promise<UserDto | null> {
-    const user = await this.usersService.findByUsername(username);
+  async validateUser(
+    tenantId: string,
+    username: string,
+    password: string,
+  ): Promise<UserDto | null> {
+    const user = await this.usersService.findByUsername(tenantId, username);
     if (!user || !user.isActive) {
       return null;
     }
@@ -43,8 +47,15 @@ export class AuthService {
     return userDto as UserDto;
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponse> {
-    const user = await this.validateUser(loginDto.username, loginDto.password);
+  async login(
+    loginDto: LoginDto,
+    tenant: { tenantId: string; tenantKey: string },
+  ): Promise<AuthResponse> {
+    const user = await this.validateUser(
+      tenant.tenantId,
+      loginDto.username,
+      loginDto.password,
+    );
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -53,6 +64,7 @@ export class AuthService {
       username: user.username,
       sub: user.id,
       role: user.role,
+      tenantId: tenant.tenantId,
     };
 
     // Generate access token
@@ -75,7 +87,17 @@ export class AuthService {
     if (!user || !user.isActive) {
       return null;
     }
-    // UserDto already excludes passwordHash, so return directly
+    return user;
+  }
+
+  async validateUserByIdAndTenant(
+    userId: number,
+    tenantId: string,
+  ): Promise<UserDto | null> {
+    const user = await this.usersService.findByIdAndTenant(userId, tenantId);
+    if (!user || !user.isActive) {
+      return null;
+    }
     return user;
   }
 }

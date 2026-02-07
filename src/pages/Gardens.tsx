@@ -90,21 +90,21 @@ const Gardens = () => {
   
   const campusGardens = gardens.filter(g => g.campusId === activeTab);
   
-  // Helper: Backend'den bahçe için en son SCORED inspection tarihini al
+  // Helper: Backend'den bahçe için en son SUBMITTED inspection tarihini al
   const getLatestEvaluationDateForGarden = (gardenId: number): string | null => {
     const gardenInspections = inspections
-      .filter(i => i.gardenId === gardenId && i.status === "SCORED" && typeof i.score === "number")
+      .filter(i => i.gardenId === gardenId && i.status === "SUBMITTED" && typeof i.score === "number")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
     return gardenInspections.length > 0 ? gardenInspections[0].createdAt : null;
   };
   
-  // Calculate campus score from backend SCORED inspections
+  // Calculate campus score from backend SUBMITTED inspections
   // KRİTİK KURAL: Değerlendirilmemiş bahçeler ortalamaya dahil edilmez
   const gardenScores: number[] = [];
   let latestDate: string | null = null;
   
-  // Collect all SCORED evaluations from campus gardens for chart
+  // Collect all SUBMITTED evaluations from campus gardens for chart
   const allCampusEvaluations: { date: string; score: number }[] = [];
   
   campusGardens.forEach(g => {
@@ -123,9 +123,9 @@ const Gardens = () => {
       }
     }
     
-    // Chart için tüm SCORED inspections'ları topla
+    // Chart için tüm SUBMITTED inspections'ları topla
     const gardenInspections = inspections
-      .filter(i => i.gardenId === g.id && i.status === "SCORED" && typeof i.score === "number")
+      .filter(i => i.gardenId === g.id && i.status === "SUBMITTED" && typeof i.score === "number")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
     gardenInspections.forEach(inspection => {

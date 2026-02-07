@@ -7,15 +7,33 @@ import { UserDto } from './dto/user.dto';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findByUsername(username: string): Promise<User | null> {
+  async findByUsername(tenantId: string, username: string): Promise<User | null> {
     return this.prisma.user.findUnique({
-      where: { username },
+      where: { tenantId_username: { tenantId, username } },
     });
   }
 
   async findById(id: number): Promise<UserDto | null> {
     const user = await this.prisma.user.findUnique({
       where: { id },
+      select: {
+        id: true,
+        tenantId: true,
+        username: true,
+        displayName: true,
+        role: true,
+        email: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return user;
+  }
+
+  async findByIdAndTenant(id: number, tenantId: string): Promise<UserDto | null> {
+    const user = await this.prisma.user.findFirst({
+      where: { id, tenantId },
       select: {
         id: true,
         username: true,
@@ -30,8 +48,9 @@ export class UsersService {
     return user;
   }
 
-  async findAll(): Promise<UserDto[]> {
+  async findAll(tenantId: string): Promise<UserDto[]> {
     return this.prisma.user.findMany({
+      where: { tenantId },
       select: {
         id: true,
         username: true,

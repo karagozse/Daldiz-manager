@@ -3,109 +3,102 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+const TENANT_KEY = 'kral';
+
 async function main() {
   console.log('🌱 Starting database seed...');
 
-  // Seed Campuses
+  // 1. Create tenant "kral"
+  console.log('🏢 Seeding tenant...');
+  const tenant = await prisma.tenant.upsert({
+    where: { key: TENANT_KEY },
+    update: {},
+    create: {
+      key: TENANT_KEY,
+      name: 'Kral',
+      status: 'active',
+    },
+  });
+  const tenantId = tenant.id;
+  console.log(`✅ Tenant seeded: ${tenant.key} (${tenantId})`);
+
+  // 2. Seed Campuses for kral
   console.log('📦 Seeding campuses...');
-  await prisma.campus.upsert({
-    where: { id: 'belek' },
-    update: {},
-    create: {
-      id: 'belek',
-      name: 'Belek Kampüsü',
-      weight: 0.60,
-    },
-  });
-
-  await prisma.campus.upsert({
-    where: { id: 'candir' },
-    update: {},
-    create: {
-      id: 'candir',
-      name: 'Çandır Kampüsü',
-      weight: 0.20,
-    },
-  });
-
-  await prisma.campus.upsert({
-    where: { id: 'manavgat' },
-    update: {},
-    create: {
-      id: 'manavgat',
-      name: 'Manavgat Kampüsü',
-      weight: 0.20,
-    },
-  });
-
-  console.log('✅ Campuses seeded');
-
-  // Seed Gardens
-  console.log('🌳 Seeding gardens...');
-  
-  // Frontend mockData.ts'teki INITIAL_GARDENS verilerine göre bahçe listesi
-  // Belek: 12 gardens, Çandır: 3 gardens, Manavgat: 5 gardens
-  const gardensData = [
-    // Belek - 12 gardens
-    { name: 'Belek-1', campusId: 'belek' },
-    { name: 'Belek-2', campusId: 'belek' },
-    { name: 'Belek-3', campusId: 'belek' },
-    { name: 'Belek-4', campusId: 'belek' },
-    { name: 'Belek-5', campusId: 'belek' },
-    { name: 'Belek-6', campusId: 'belek' },
-    { name: 'Belek-7', campusId: 'belek' },
-    { name: 'Belek-8', campusId: 'belek' },
-    { name: 'Belek-9', campusId: 'belek' },
-    { name: 'Belek-10', campusId: 'belek' },
-    { name: 'Belek-11', campusId: 'belek' },
-    { name: 'Belek-12', campusId: 'belek' },
-    // Çandır - 3 gardens
-    { name: 'Çandır-1', campusId: 'candir' },
-    { name: 'Çandır-2', campusId: 'candir' },
-    { name: 'Çandır-3', campusId: 'candir' },
-    // Manavgat - 5 gardens
-    { name: 'Manavgat-1', campusId: 'manavgat' },
-    { name: 'Manavgat-2', campusId: 'manavgat' },
-    { name: 'Manavgat-3', campusId: 'manavgat' },
-    { name: 'Manavgat-4', campusId: 'manavgat' },
-    { name: 'Manavgat-5', campusId: 'manavgat' },
+  const campusData = [
+    { id: 'belek', name: 'Belek Kampüsü', weight: 0.6 },
+    { id: 'candir', name: 'Çandır Kampüsü', weight: 0.2 },
+    { id: 'manavgat', name: 'Manavgat Kampüsü', weight: 0.2 },
   ];
-
-  // Her bahçe için upsert işlemi (name + campusId kombinasyonu unique olmalı)
-  for (const garden of gardensData) {
-    // Önce bu isim ve kampüs kombinasyonunda bahçe var mı kontrol et
-    const existingGarden = await prisma.garden.findFirst({
-      where: {
-        name: garden.name,
-        campusId: garden.campusId,
+  for (const c of campusData) {
+    await prisma.campus.upsert({
+      where: { tenantId_id: { tenantId, id: c.id } },
+      update: {},
+      create: {
+        tenantId,
+        id: c.id,
+        name: c.name,
+        weight: c.weight,
       },
     });
+  }
+  console.log('✅ Campuses seeded');
 
-    if (!existingGarden) {
+  // 3. Seed Gardens for kral
+  console.log('🌳 Seeding gardens...');
+  const gardensData = [
+    ...Array.from({ length: 12 }, (_, i) => ({ name: `Belek-${i + 1}`, campusId: 'belek' })),
+    ...Array.from({ length: 3 }, (_, i) => ({ name: `Çandır-${i + 1}`, campusId: 'candir' })),
+    ...Array.from({ length: 5 }, (_, i) => ({ name: `Manavgat-${i + 1}`, campusId: 'manavgat' })),
+  ];
+  for (const g of gardensData) {
+    const existing = await prisma.garden.findFirst({
+      where: { tenantId, name: g.name, campusTenantId: tenantId, campusId: g.campusId },
+    });
+    if (!existing) {
       await prisma.garden.create({
         data: {
-          name: garden.name,
-          campusId: garden.campusId,
-          status: 'ACTIVE', // Default status
+          tenantId,
+          name: g.name,
+          campusTenantId: tenantId,
+          campusId: g.campusId,
+          status: 'ACTIVE',
         },
       });
-      console.log(`  ✓ Created garden: ${garden.name} (${garden.campusId})`);
-    } else {
-      console.log(`  ⊙ Garden already exists: ${garden.name} (${garden.campusId})`);
+      console.log(`  ✓ Created garden: ${g.name} (${g.campusId})`);
     }
   }
-
   console.log('✅ Gardens seeded');
 
-  // Hash password for all users
+  // 4. Seed Users - admin (admin/admin123) for kral
   const passwordHash = await bcrypt.hash('123123', 10);
+  const adminPasswordHash = await bcrypt.hash('admin123', 10);
 
-  // Seed Users
   console.log('👤 Seeding users...');
+  const existingAdmin = await prisma.user.findUnique({
+    where: { tenantId_username: { tenantId, username: 'admin' } },
+  });
+  if (!existingAdmin) {
+    await prisma.user.create({
+      data: {
+        tenantId,
+        username: 'admin',
+        passwordHash: adminPasswordHash,
+        displayName: 'Yönetici',
+        role: Role.ADMIN,
+        email: 'admin@dosttarim.com',
+        isActive: true,
+      },
+    });
+    console.log('Default admin created → admin / admin123');
+  } else {
+    console.log('Admin user already exists, skipping');
+  }
+
   await prisma.user.upsert({
-    where: { username: 'consultant' },
+    where: { tenantId_username: { tenantId, username: 'consultant' } },
     update: {},
     create: {
+      tenantId,
       username: 'consultant',
       passwordHash,
       displayName: 'Ziraat Danışmanı',
@@ -116,9 +109,10 @@ async function main() {
   });
 
   await prisma.user.upsert({
-    where: { username: 'auditor' },
+    where: { tenantId_username: { tenantId, username: 'auditor' } },
     update: {},
     create: {
+      tenantId,
       username: 'auditor',
       passwordHash,
       displayName: 'Baş Denetçi',
@@ -129,22 +123,10 @@ async function main() {
   });
 
   await prisma.user.upsert({
-    where: { username: 'admin' },
+    where: { tenantId_username: { tenantId, username: 'root' } },
     update: {},
     create: {
-      username: 'admin',
-      passwordHash,
-      displayName: 'Yönetici',
-      role: Role.ADMIN,
-      email: 'admin@dosttarim.com',
-      isActive: true,
-    },
-  });
-
-  await prisma.user.upsert({
-    where: { username: 'root' },
-    update: {},
-    create: {
+      tenantId,
       username: 'root',
       passwordHash,
       displayName: 'Sistem Yöneticisi',
@@ -155,7 +137,7 @@ async function main() {
   });
 
   console.log('✅ Users seeded');
-  console.log('📝 Default password for all users: 123123');
+  console.log('📝 Default password for all users except admin: 123123');
 
   console.log('✨ Seed completed successfully!');
 }

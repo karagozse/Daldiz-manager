@@ -44,11 +44,9 @@ export function mapPendingPrescriptionsToTasks(rows: Prescription[]): ReviewTask
   });
 }
 
-/** Map pending inspections (SUBMITTED/REVIEW) to ReviewTask[]. */
-export function mapPendingInspectionsToTasks(rows: BackendInspection[]): ReviewTask[] {
-  const pending = rows.filter(
-    (i) => i.status === "SUBMITTED" || i.status === "REVIEW"
-  );
+/** Map pending inspections to ReviewTask[] - Single-layer flow: no separate pending evaluations. */
+export function mapPendingInspectionsToTasks(_rows: BackendInspection[]): ReviewTask[] {
+  const pending = _rows.filter(() => false); // No SUBMITTED/REVIEW in single-layer flow
   return pending.map((i) => {
     const campusName = i.garden?.campus?.name ?? "—";
     const gardenName = i.garden?.name ?? "—";

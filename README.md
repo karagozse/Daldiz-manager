@@ -26,6 +26,7 @@ Bu proje şu teknolojilerle geliştirilmiştir:
 
 - Node.js 18+ (tercihen 20+) & npm - [nvm ile kurulum](https://github.com/nvm-sh/nvm#installing-and-updating)
 - Lokal geliştirme için: Backend (NestJS) + Frontend (Vite) ayrı portlarda çalışır.
+- **Not:** Kök `.env` ve `backend/.env` ayrıdır. Backend sadece `backend/.env` dosyasını kullanır; DATABASE_URL, JWT_SECRET vb. bu dosyada olmalıdır.
 
 ### Lokal çalıştırma (Backend + Frontend)
 

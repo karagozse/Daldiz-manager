@@ -159,10 +159,8 @@ const EvaluationForm = () => {
     loadOpenWarnings();
   }, [gardenId]);
   
-  // Determine backendPendingInspection - use oldest SUBMITTED/REVIEW (first in queue)
-  const pendingInspection = inspections
-    .filter(i => i.gardenId === gardenId && (i.status === "SUBMITTED" || i.status === "REVIEW"))
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
+  // Single-layer flow: no SUBMITTED/REVIEW - redirect to garden
+  const pendingInspection = null;
   
   // Keep backendPending for backward compatibility with existing code
   const backendPending = pendingInspection;
@@ -252,8 +250,21 @@ const EvaluationForm = () => {
     lastInitializedEvaluationId.current = currentEvaluationId;
   }, [mockPendingEvaluation?.id, mockPendingEvaluation]);
   
-  // Form gösterilmeli mi? Backend veya mock pending evaluation varsa göster
   const hasPendingEvaluation = !!backendPending || !!mockPendingEvaluation;
+
+  useEffect(() => {
+    if (!hasPendingEvaluation && gardenId) {
+      navigate(`/bahce/${gardenId}`);
+    }
+  }, [hasPendingEvaluation, gardenId, navigate]);
+
+  if (!hasPendingEvaluation && gardenId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Yönlendiriliyor...</p>
+      </div>
+    );
+  }
 
   // Get previous scores from last completed cycle for REFERENCE only
   const previousCycle = completedCycles[0];
@@ -494,9 +505,8 @@ const EvaluationForm = () => {
       // Toplam bahçe skorunu hesapla
       const gardenScore = calculateGardenScore(updatedTopicsWithScores);
       
-      // Update the existing SUBMITTED inspection to SCORED (do NOT create new inspection)
       await updateInspection(pendingInspection.id, {
-        status: "SCORED",
+        status: "SUBMITTED",
         score: Math.round(gardenScore),
         topics: updatedTopicsWithScores,
       });

@@ -47,7 +47,7 @@ export interface UserCredentials {
 
 // Mock verileri dışa aktar (geriye uyumluluk için)
 export { VALID_USERS, INSPECTION_TOPICS, CAMPUS_WEIGHTS };
-export type InspectionState = "DRAFT" | "SUBMITTED_FOR_REVIEW" | "COMPLETED";
+export type InspectionState = "DRAFT" | "SUBMITTED";
 export type TopicStatus = "uygun" | "kismen_uygun" | "uygun_degil" | "not_started";
 
 /**
@@ -57,7 +57,7 @@ export interface BackendInspection {
   id: string;
   gardenId: number;
   createdById: number;
-  status: "DRAFT" | "SUBMITTED" | "REVIEW" | "SCORED";
+  status: "DRAFT" | "SUBMITTED";
   createdAt: string;
   score: number | null;
   topics?: Array<{
@@ -97,10 +97,7 @@ export const mapBackendStatusToFrontendState = (
     case "DRAFT":
       return "DRAFT";
     case "SUBMITTED":
-    case "REVIEW":
-      return "SUBMITTED_FOR_REVIEW";
-    case "SCORED":
-      return "COMPLETED";
+      return "SUBMITTED";
     default:
       return "DRAFT";
   }
@@ -305,7 +302,7 @@ export const calculateGardenScore = (topics: TopicInspection[]): number => {
    * 
    * @returns number | null - Kampüs skoru (0-100) veya null (hiç skor yoksa)
    * 
-   * NOT: Bu fonksiyon sadece backend SCORED inspections'dan skor okur.
+   * NOT: Bu fonksiyon sadece backend SUBMITTED inspections'dan skor okur.
    * Mock inspectionCycles kullanılmaz.
    */
 export const calculateCampusScore = (
@@ -340,7 +337,7 @@ export const calculateCampusScore = (
  * 
  * @returns number | null - Genel skor (0-100) veya null (hiç skor yoksa)
  * 
- * NOT: Bu fonksiyon sadece backend SCORED inspections'dan skor okur.
+ * NOT: Bu fonksiyon sadece backend SUBMITTED inspections'dan skor okur.
  * Mock inspectionCycles kullanılmaz.
  */
 export const calculateGeneralScore = (
@@ -412,11 +409,12 @@ interface AppContextType {
   // Backend API entegrasyonu için merkezi veri yükleme
   isInitialDataLoading: boolean;
   loadInitialDataFromApi: () => Promise<void>;
+  loadGardens: () => Promise<void>;
   // Backend Inspection API entegrasyonu
   inspections: BackendInspection[];
   loadInspectionsForGarden: (gardenId: number) => Promise<void>;
   loadAllInspections: () => Promise<void>;
-  createInspection: (gardenId: number, options?: { status?: BackendInspection["status"]; topics?: any }) => Promise<BackendInspection>;
+  createInspection: (gardenId: number, options?: { status?: BackendInspection["status"]; topics?: any; score?: number }) => Promise<BackendInspection>;
   updateInspection: (inspectionId: string, data: { status?: BackendInspection["status"]; score?: number; topics?: any }) => Promise<BackendInspection>;
   // Backend score helper fonksiyonları
   getBackendScoresByGarden: () => Map<number, number[]>;
@@ -606,19 +604,19 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
   }, [gardens]);
 
   /**
-   * Get completed inspections for a garden from backend (SCORED status)
+   * Get completed inspections for a garden from backend (SUBMITTED status)
    * Falls back to mock inspectionCycles for backward compatibility
    * Pure selector function - no state updates
    */
   const getCompletedCyclesForGarden = useCallback((gardenId: number) => {
     // First, try to get from backend inspections
     const backendScored = inspections
-      .filter(i => i.gardenId === gardenId && i.status === "SCORED")
+      .filter(i => i.gardenId === gardenId && i.status === "SUBMITTED")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map(i => ({
         id: i.id,
         gardenId: i.gardenId,
-        state: "COMPLETED" as InspectionState,
+        state: "SUBMITTED" as InspectionState,
         consultantSubmissionDate: i.createdAt,
         evaluationDate: i.createdAt, // Use createdAt as evaluation date for now
         topics: (i.topics as TopicInspection[]) || [],
@@ -628,7 +626,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
     
     // Also include mock cycles for backward compatibility
     const mockCompleted = inspectionCycles
-      .filter(c => c.gardenId === gardenId && c.state === "COMPLETED")
+      .filter(c => c.gardenId === gardenId && c.state === "SUBMITTED")
       .sort((a, b) => new Date(b.evaluationDate!).getTime() - new Date(a.evaluationDate!).getTime());
     
     // Combine and deduplicate by ID, prioritizing backend data
@@ -662,29 +660,12 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
   }, [getCompletedCyclesForGarden]);
 
   /**
-   * Get pending evaluation for a garden from backend (SUBMITTED or REVIEW status)
-   * Falls back to mock inspectionCycles for backward compatibility
+   * Get pending evaluation for a garden - DEPRECATED in single-layer flow.
+   * No separate auditor evaluation step anymore. Returns null.
    */
-  const getPendingEvaluationForGarden = useCallback((gardenId: number) => {
-    // First, try to get from backend inspections
-    const backendPending = inspections
-      .filter(i => i.gardenId === gardenId && (i.status === "SUBMITTED" || i.status === "REVIEW"))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-    
-    if (backendPending) {
-      return {
-        id: backendPending.id,
-        gardenId: backendPending.gardenId,
-        state: "SUBMITTED_FOR_REVIEW" as InspectionState,
-        consultantSubmissionDate: backendPending.createdAt,
-        topics: (backendPending.topics as TopicInspection[]) || [],
-        criticalWarnings: [], // Critical warnings not yet in backend
-      };
-    }
-    
-    // Fallback to mock cycles
-    return inspectionCycles.find(c => c.gardenId === gardenId && c.state === "SUBMITTED_FOR_REVIEW");
-  }, [inspections, inspectionCycles]);
+  const getPendingEvaluationForGarden = useCallback((_gardenId: number) => {
+    return undefined;
+  }, []);
 
   /**
    * Pure lookup function - finds draft inspection for a garden
@@ -794,7 +775,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
       const cycle: InspectionCycle = {
         id: `eval-${randomGardenId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         gardenId: randomGardenId,
-        state: "COMPLETED",
+        state: "SUBMITTED",
         consultantSubmissionDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
         evaluationDate: new Date().toISOString(),
         topics,
@@ -848,7 +829,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
             const cycle: InspectionCycle = {
               id: `yearly-${campusId}-${year}-${month}-${evalNum}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               gardenId: garden.id,
-              state: "COMPLETED",
+              state: "SUBMITTED",
               consultantSubmissionDate: new Date(evalDate.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
               evaluationDate: evalDate.toISOString(),
               topics,
@@ -944,6 +925,40 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
   }, []);
 
   /**
+   * Sadece gardens verisini backend'den yeniden yükle.
+   * Kritik uyarı eklendi/kapatıldığında openCriticalWarningCount güncellemesi için kullanılır.
+   */
+  const loadGardens = useCallback(async (): Promise<void> => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+    try {
+      const gardensFromApi = await apiFetch<Array<{
+        id: number;
+        name: string;
+        status: "ACTIVE" | "INACTIVE";
+        campusId: string;
+        campus: {
+          id: string;
+          name: string;
+          weight: number;
+        };
+        openCriticalWarningCount?: number;
+      }>>("/gardens");
+      const mappedGardens: Garden[] = gardensFromApi.map(g => ({
+        id: g.id,
+        name: g.name,
+        campusId: g.campusId,
+        campusName: g.campus.name,
+        status: g.status,
+        openCriticalWarningCount: Number(g.openCriticalWarningCount ?? 0),
+      }));
+      setGardens(mappedGardens);
+    } catch (error) {
+      console.error("loadGardens error", error);
+    }
+  }, []);
+
+  /**
    * Tüm inspections'ları backend'den yükle
    */
   const loadAllInspections = useCallback(async (): Promise<void> => {
@@ -985,11 +1000,12 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
    */
   const createInspection = useCallback(async (
     gardenId: number,
-    options?: { status?: BackendInspection["status"]; topics?: any }
+    options?: { status?: BackendInspection["status"]; topics?: any; score?: number }
   ): Promise<BackendInspection> => {
     const payload: any = { gardenId };
     if (options?.status) payload.status = options.status;
     if (options?.topics) payload.topics = options.topics;
+    if (options?.score !== undefined) payload.score = options.score;
 
     const newInspection = await apiFetch<BackendInspection>("/inspections", {
       method: "POST",
@@ -1043,7 +1059,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
   }, []);
 
   /**
-   * Backend inspections içinden SCORED olanları gardenId bazında grupla
+   * Backend inspections içinden SUBMITTED olanları gardenId bazında grupla
    * Her gardenId için score listesini createdAt ascending (chronological) sıralı döndür
    * Chart'lar için eski skorlar önce, yeni skorlar sonra gösterilmeli
    */
@@ -1051,7 +1067,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
     const scoresMap = new Map<number, number[]>();
     
     inspections
-      .filter(i => i.status === "SCORED" && typeof i.score === "number")
+      .filter(i => i.status === "SUBMITTED" && typeof i.score === "number")
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       .forEach(inspection => {
         const arr = scoresMap.get(inspection.gardenId) ?? [];
@@ -1063,20 +1079,20 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
   }, [inspections]);
 
   /**
-   * Belirli bir bahçe için en son SCORED inspection'ın score'unu döndür
+   * Belirli bir bahçe için en son SUBMITTED inspection'ın score'unu döndür
    * @param gardenId - Bahçe ID'si
    * @returns Score değeri veya null
    */
   const getLatestBackendScoreForGarden = useCallback((gardenId: number): number | null => {
     const latestScored = inspections
-      .filter(i => i.gardenId === gardenId && i.status === "SCORED" && i.score !== null && i.score !== undefined)
+      .filter(i => i.gardenId === gardenId && i.status === "SUBMITTED" && i.score !== null && i.score !== undefined)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
     
     return latestScored?.score ?? null;
   }, [inspections]);
 
   /**
-   * Belirli bir bahçe için en son SCORED inspection'ın score'unu döndür (chronological order)
+   * Belirli bir bahçe için en son SUBMITTED inspection'ın score'unu döndür (chronological order)
    * Uses ascending sort and returns the last (newest) score
    * @param gardenId - Bahçe ID'si
    * @returns Score değeri veya null
@@ -1086,7 +1102,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
       .filter(
         (i) =>
           i.gardenId === gardenId &&
-          i.status === "SCORED" &&
+          i.status === "SUBMITTED" &&
           typeof i.score === "number"
       )
       .sort(
@@ -1522,6 +1538,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
     // Backend API entegrasyonu için merkezi veri yükleme
     isInitialDataLoading,
     loadInitialDataFromApi,
+    loadGardens,
     // Backend Inspection API entegrasyonu
     inspections,
     loadInspectionsForGarden,
@@ -1594,6 +1611,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
     toggleGardenStatus,
     getActiveGardens,
     loadInitialDataFromApi,
+    loadGardens,
     loadInspectionsForGarden,
     loadAllInspections,
     createInspection,

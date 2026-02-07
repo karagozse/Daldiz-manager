@@ -18,8 +18,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Request() req: { tenant: { tenantId: string; tenantKey: string } }) {
+    return this.authService.login(loginDto, req.tenant);
   }
 
   @Get('me')

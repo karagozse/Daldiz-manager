@@ -9,8 +9,9 @@ export class CampusesService {
     private criticalWarningsService: CriticalWarningsService,
   ) {}
 
-  async findAll() {
+  async findAll(tenantId: string) {
     const campuses = await this.prisma.campus.findMany({
+      where: { tenantId },
       include: {
         gardens: true,
       },
@@ -24,6 +25,7 @@ export class CampusesService {
           where: {
             status: 'OPEN',
             gardenId: { in: campus.gardens.map((g) => g.id) },
+            garden: { tenantId },
           },
         });
 
@@ -37,9 +39,9 @@ export class CampusesService {
     return campusesWithCounts;
   }
 
-  async findOne(id: string) {
+  async findOne(tenantId: string, id: string) {
     const campus = await this.prisma.campus.findUnique({
-      where: { id },
+      where: { tenantId_id: { tenantId, id } },
       include: {
         gardens: {
           where: { status: 'ACTIVE' },
@@ -56,6 +58,7 @@ export class CampusesService {
       where: {
         status: 'OPEN',
         gardenId: { in: campus.gardens.map((g) => g.id) },
+        garden: { tenantId },
       },
     });
 

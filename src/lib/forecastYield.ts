@@ -64,13 +64,13 @@ export function computeCampusMonthlyAverage(
   );
 }
 
-/** inspections/gardens'den SCORED kayıtları ScoredEntry[] yapar */
+/** inspections/gardens'den SUBMITTED kayıtları ScoredEntry[] yapar */
 function buildScoredInspections(
   inspections: Array<{ gardenId: number; status: string; score: number | null; createdAt: string }>,
   gardens: Array<{ id: number; campusId: string }>
 ): ScoredEntry[] {
   return inspections
-    .filter((i) => i.status === "SCORED" && typeof i.score === "number")
+    .filter((i) => i.status === "SUBMITTED" && typeof i.score === "number")
     .map((i) => {
       const garden = gardens.find((g) => g.id === i.gardenId);
       return {
@@ -115,7 +115,7 @@ export function computeForecastYieldTonPerDaForCampus(params: {
 }
 
 /**
- * Tek bahçe için o aydaki SCORED denetim skorlarının ortalaması.
+ * Tek bahçe için o aydaki SUBMITTED denetim skorlarının ortalaması.
  */
 export function computeGardenMonthlyAverage(
   entries: Array<{ createdAt: Date; score: number }>,
@@ -148,7 +148,7 @@ export function computeForecastYieldTonPerDaForGarden(params: {
     .filter(
       (i) =>
         i.gardenId === gardenId &&
-        i.status === "SCORED" &&
+        i.status === "SUBMITTED" &&
         typeof i.score === "number"
     )
     .map((i) => ({

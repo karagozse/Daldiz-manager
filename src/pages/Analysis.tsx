@@ -35,7 +35,7 @@ const Analysis = () => {
   const [selectedInspection, setSelectedInspection] = useState<BackendInspection | null>(null);
 
   // Section 1: Worst Gardens (Top 5) - sorted by lowest score first
-  // Sadece backend SCORED inspections kullanılır
+  // Sadece backend SUBMITTED inspections kullanılır
   const worstGardens = useMemo(() => {
     return gardens
       .map(garden => {
@@ -60,7 +60,7 @@ const Analysis = () => {
   const monthNames = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 
   // Performance chart data - grouped by month with all 12 months shown
-  // Sadece backend SCORED inspections kullanılır, mock fallback yok
+  // Sadece backend SUBMITTED inspections kullanılır, mock fallback yok
   const performanceChartData = useMemo(() => {
     // Backend inspections'ları tarih ve bahçe bilgisiyle birleştir
     const backendScoreEntries: Array<{
@@ -71,7 +71,7 @@ const Analysis = () => {
     }> = [];
     
     inspections
-      .filter(i => i.status === "SCORED" && i.score !== null && i.score !== undefined)
+      .filter(i => i.status === "SUBMITTED" && i.score !== null && i.score !== undefined)
       .forEach(inspection => {
         const garden = gardens.find(g => g.id === inspection.gardenId);
         backendScoreEntries.push({
@@ -194,8 +194,8 @@ const Analysis = () => {
 
   // Section: Completed Inspection Reports
   const completedInspections = useMemo(() => {
-    // Filter only SCORED inspections (completed reports)
-    const scored = inspections.filter(i => i.status === "SCORED");
+    // Filter only SUBMITTED inspections (completed reports)
+    const scored = inspections.filter(i => i.status === "SUBMITTED");
     
     // Sort by createdAt descending (newest first)
     const sorted = scored.sort((a, b) => 
