@@ -1,0 +1,19 @@
+Daldız Kullanıcılar
+
+--- Yönetici (ADMIN) ---
+dost1    | şifre: 113819
+dost2    | şifre: 121035
+dost3    | şifre: 251056
+dost4    | şifre: 298704
+dost5    | şifre: 503893
+dost6    | şifre: 584671
+dost7    | şifre: 677744
+dost8    | şifre: 686213
+dost9    | şifre: 700858
+dost10   | şifre: 737152
+
+--- Danışman (CONSULTANT) ---
+danisman | şifre: 758295
+
+--- Denetçi (LEAD_AUDITOR) ---
+denetci  | şifre: 815057

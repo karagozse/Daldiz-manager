@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                                              Int                         @id @default(autoincrement())
+  username                                        String                      @unique
+  passwordHash                                    String
+  displayName                                     String
+  role                                            Role
+  email                                           String?                     @unique
+  isActive                                        Boolean                     @default(true)
+  createdAt                                       DateTime                    @default(now())
+  updatedAt                                       DateTime                    @updatedAt
+  closedCriticalWarnings                          CriticalWarning[]           @relation("ClosedBy")
+  createdCriticalWarnings                         CriticalWarning[]           @relation("CreatedBy")
+  inspections                                     Inspection[]
+  prescriptions_prescriptions_createdByIdTousers  Prescription[]              @relation("prescriptions_createdByIdTousers")
+  prescriptions_prescriptions_reviewedByIdTousers Prescription[]              @relation("prescriptions_reviewedByIdTousers")
+  user_notification_settings                      user_notification_settings?
+  web_push_subscriptions                          web_push_subscriptions[]
+
+  @@map("users")
+}
+
+model Campus {
+  id            String         @id
+  name          String
+  weight        Float
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  gardens       Garden[]
+  prescriptions Prescription[]
+
+  @@map("campuses")
+}
+
+model Garden {
+  id               Int               @id @default(autoincrement())
+  name             String
+  status           GardenStatus      @default(ACTIVE)
+  campusId         String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  criticalWarnings CriticalWarning[]
+  campus           Campus            @relation(fields: [campusId], references: [id])
+  inspections      Inspection[]
+
+  @@index([campusId])
+  @@index([status])
+  @@map("gardens")
+}
+
+model Inspection {
+  id               String            @id @default(uuid())
+  gardenId         Int
+  createdById      Int
+  status           InspectionStatus  @default(DRAFT)
+  createdAt        DateTime          @default(now())
+  score            Int?
+  topics           Json?
+  criticalWarnings CriticalWarning[]
+  createdBy        User              @relation(fields: [createdById], references: [id])
+  garden           Garden            @relation(fields: [gardenId], references: [id])
+
+  @@index([gardenId])
+  @@index([createdById])
+  @@index([status])
+  @@map("inspections")
+}
+
+model CriticalWarning {
+  id           String                   @id @default(uuid())
+  inspectionId String
+  gardenId     Int
+  topicId      Int
+  title        String
+  description  String
+  status       CriticalWarningStatus    @default(OPEN)
+  openedAt     DateTime                 @default(now())
+  closedAt     DateTime?
+  closureNote  String?
+  severity     CriticalWarningSeverity?
+  createdById  Int?
+  closedById   Int?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  closedBy     User?                    @relation("ClosedBy", fields: [closedById], references: [id])
+  createdBy    User?                    @relation("CreatedBy", fields: [createdById], references: [id])
+  garden       Garden                   @relation(fields: [gardenId], references: [id], onDelete: Cascade)
+  inspection   Inspection               @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([gardenId, status])
+  @@index([status, topicId])
+  @@index([openedAt])
+  @@index([inspectionId])
+  @@map("critical_warnings")
+}
+
+model Prescription {
+  id                                      Int       @id @default(autoincrement())
+  campusId                                String
+  createdById                             Int
+  createdAt                               DateTime  @default(now())
+  ventilation                             String?
+  irrigation                              String?
+  fertilization                           String?
+  status                                  String    @default("draft")
+  reviewedById                            Int?
+  reviewedAt                              DateTime?
+  campuses                                Campus    @relation(fields: [campusId], references: [id])
+  users_prescriptions_createdByIdTousers  User      @relation("prescriptions_createdByIdTousers", fields: [createdById], references: [id])
+  users_prescriptions_reviewedByIdTousers User?     @relation("prescriptions_reviewedByIdTousers", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([campusId])
+  @@index([createdById])
+  @@index([reviewedById])
+  @@map("prescriptions")
+}
+
+model playing_with_neon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
+}
+
+model user_notification_settings {
+  id                       Int      @id @default(autoincrement())
+  userId                   Int      @unique
+  campusBelek              Boolean  @default(true)
+  campusCandir             Boolean  @default(true)
+  campusManavgat           Boolean  @default(true)
+  enableNewEvaluation      Boolean  @default(true)
+  enableNewPrescription    Boolean  @default(true)
+  enableNewCriticalWarning Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime
+  users                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model web_push_subscriptions {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  users     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum Role {
+  CONSULTANT
+  LEAD_AUDITOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum GardenStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InspectionStatus {
+  DRAFT
+  SUBMITTED
+  REVIEW
+  SCORED
+}
+
+enum CriticalWarningStatus {
+  OPEN
+  CLOSED
+}
+
+enum CriticalWarningSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum PrescriptionStatus {
+  PENDING
+  APPROVED
+}

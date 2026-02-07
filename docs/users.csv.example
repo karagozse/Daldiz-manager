@@ -1,0 +1,5 @@
+email,username,displayName,role,campusId
+root@dosttarim.com,root,Sistem Yöneticisi,SUPER_ADMIN,
+admin@dosttarim.com,admin,Yönetici,ADMIN,
+consultant@dosttarim.com,consultant,Ziraat Danışmanı,CONSULTANT,
+auditor@dosttarim.com,auditor,Baş Denetçi,LEAD_AUDITOR,

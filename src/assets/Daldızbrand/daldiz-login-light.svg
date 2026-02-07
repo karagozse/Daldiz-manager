@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 667" width="375" height="667">
+  <defs>
+    <clipPath id="phoneClip">
+      <rect width="375" height="667" rx="20"/>
+    </clipPath>
+  </defs>
+  <rect width="375" height="667" fill="#ffffff" rx="20"/>
+  <g clip-path="url(#phoneClip)">
+    <g transform="translate(107, 100)">
+      
+
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@700&display=swap');
+    .wordmark { font-family: 'Nunito Sans', sans-serif; font-weight: 700; font-size: 45px; fill: #231f20; letter-spacing: -0.02em; text-anchor: middle; }
+  </style>
+  <g transform="translate(38.975, 0)">
+    <g transform="matrix(0.17812600220931477,0,0,-0.17812600220931477,-95,138)">
+      <g transform="translate(302.9266,232.7818)">
+        <path fill="#231f20" d="m 0,0 c -60.014,-3.041 -109.312,46.259 -106.27,106.272 2.605,51.386 44.359,93.138 95.745,95.741 C 49.487,205.053 98.784,155.756 95.743,95.744 93.14,44.358 51.386,2.604 0,0 M 95.877,503.287 V 311.13 c -31.947,15.406 -67.944,23.741 -105.96,22.973 -123.819,-2.5 -227.95,-108.533 -228.324,-232.377 -0.397,-131.257 107.677,-237.371 239.654,-233.775 126.646,3.45 226.635,109.107 226.635,235.8 v 399.536 c 0,3.33 -2.7,6.029 -6.029,6.029 H 101.906 c -3.33,0 -6.029,-2.699 -6.029,-6.029"/>
+      </g>
+    </g>
+  </g>
+  <text class="wordmark" x="92" y="213.25">daldız</text>
+
+    </g>
+    <text x="40" y="315" fill="#6b7280" font-family="system-ui, sans-serif" font-size="12">Email</text>
+    <rect x="40" y="322" width="295" height="44" rx="8" fill="#f3f4f6" stroke="#e5e7eb"/>
+    <text x="52" y="350" fill="#6b7280" font-family="system-ui, sans-serif" font-size="14">hello@daldiz.com</text>
+    <text x="40" y="385" fill="#6b7280" font-family="system-ui, sans-serif" font-size="12">Password</text>
+    <rect x="40" y="392" width="295" height="44" rx="8" fill="#f3f4f6" stroke="#e5e7eb"/>
+    <text x="52" y="420" fill="#6b7280" font-family="system-ui, sans-serif" font-size="14">••••••••</text>
+    <rect x="40" y="460" width="295" height="44" rx="8" fill="#231f20"/>
+    <text x="187" y="488" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="600" font-size="14" text-anchor="middle">Sign In</text>
+    <text x="187" y="535" fill="#6b7280" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">Don't have an account? <tspan fill="#231f20" font-weight="600">Sign up</tspan></text>
+  </g>
+</svg>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daldız — Tarımsal Denetim Platformu</title>
+    <meta name="description" content="Tarımsal denetim ve izleme platformu" />
+    <meta name="author" content="Daldız" />
+
+    <meta property="og:title" content="Daldız Sera Denetim Platformu" />
+    <meta property="og:description" content="Tarımsal denetim ve izleme platformu" />
+    <meta property="og:type" content="website" />
+
+    <meta name="theme-color" content="#F7F7F7" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Daldız" />
+
+    <link rel="icon" type="image/png" href="/icons/daldiz-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.addEventListener('orientationchange', function () {
+        // Orientation değiştiğinde küçük bir gecikmeyle scroll ve scale'i normalize et
+        setTimeout(function () {
+          window.scrollTo(0, 0);
+          document.documentElement.style.zoom = '1';
+          document.body.style.zoom = '1';
+        }, 300);
+      });
+    </script>
+  </body>
+</html>
