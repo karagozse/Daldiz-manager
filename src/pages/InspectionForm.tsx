@@ -1,6 +1,21 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp, INSPECTION_TOPICS, TopicInspection, InspectionCycle, TopicStatus, CriticalWarning, InspectionState, BackendInspection, calculateGardenScore } from "@/contexts/AppContext";
+
+/** Ağırlıklı ortalama: sadece skoru seçilmiş konular, weight = topic.weight ?? 1, sonuç tam sayıya yuvarlanır. */
+function computeWeightedAverage(topics: TopicInspection[]): number | null {
+  let weightedSum = 0;
+  let totalWeight = 0;
+  topics.forEach((topic) => {
+    if (typeof topic.score !== "number") return;
+    const topicDef = INSPECTION_TOPICS.find((t) => t.id === topic.topicId);
+    const weight = topicDef?.weight ?? 1;
+    weightedSum += topic.score * weight;
+    totalWeight += weight;
+  });
+  if (totalWeight === 0) return null;
+  return Math.round(weightedSum / totalWeight);
+}
 import HeaderWithBack from "@/components/HeaderWithBack";
 import CriticalWarningsModal from "@/components/CriticalWarningsModal";
 import CriticalWarningCard from "@/components/CriticalWarningCard";
@@ -578,19 +593,15 @@ const InspectionForm = () => {
    * Handle saving a topic from the dialog.
    * IMPORTANT: This ONLY updates local state. It does NOT persist to backend.
    * Backend persistence only happens when user presses the bottom "Kaydet" or "Gönder" buttons.
-   * 
-   * Requires: topicStatus must be selected (not "not_started")
+   * Requires: both status and score selected (guard for safety).
    */
   const handleSaveTopic = () => {
-    // Validate: Status must be selected (not "not_started")
-    if (topicStatus === "not_started") {
-      toast({
-        title: "Durum seçilmedi",
-        description: "Lütfen bir uygunluk durumu seçin.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const canSave =
+      Boolean(selectedTopic) &&
+      topicStatus !== "not_started" &&
+      topicScore !== null &&
+      topicScore !== undefined;
+    if (!canSave) return;
 
     if (selectedTopic) {
       setTopics(prev => prev.map(t => {
@@ -804,6 +815,13 @@ const InspectionForm = () => {
   };
 
   const completedCount = topics.filter(t => t.status !== "not_started").length;
+
+  /** Konu modalında Kaydet için: hem durum hem puan seçili olmalı (score 0 geçerli). */
+  const canSaveTopic =
+    Boolean(selectedTopic) &&
+    topicStatus !== "not_started" &&
+    topicScore !== null &&
+    topicScore !== undefined;
   
   // Validation: Can save draft if at least 1 topic has status, can submit if all topics have status
   const hasAtLeastOneTopic = topics.some(t => 
@@ -994,8 +1012,9 @@ const InspectionForm = () => {
           <div className="space-y-4 pt-2">
             {/* Status Selection */}
             <div>
-              <label htmlFor="topicStatus" className="text-sm font-medium text-foreground mb-2 block">
+              <label id="topicStatus" className="text-sm font-medium text-foreground mb-2 block">
                 Durum
+                <span className="ml-2 text-xs text-muted-foreground font-normal">(zorunlu)</span>
               </label>
               <div className="flex gap-2" role="radiogroup" aria-labelledby="topicStatus">
                 {statusOptions.map((option) => (
@@ -1014,6 +1033,9 @@ const InspectionForm = () => {
                   </button>
                 ))}
               </div>
+              {topicStatus === "not_started" && (
+                <p className="text-xs text-muted-foreground mt-1.5">Durum seçimi zorunlu.</p>
+              )}
             </div>
             
             <div>
@@ -1061,17 +1083,22 @@ const InspectionForm = () => {
             {/* Score Section */}
             {selectedTopic && (
               <div className="mt-4">
-                <p className="text-sm font-medium text-foreground mb-3">Puan</p>
-                <div className="flex gap-2 mb-2">
+                <p className="text-sm font-medium text-foreground mb-3">
+                  Puan
+                  <span className="ml-2 text-xs text-muted-foreground font-normal">(zorunlu)</span>
+                </p>
+                <div className="flex gap-2 flex-wrap">
                   {SCORE_OPTIONS.map((scoreOption) => (
                     <button
                       key={scoreOption}
+                      type="button"
                       onClick={() => setTopicScore(scoreOption)}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      className={cn(
+                        "flex-1 min-w-[3rem] py-2.5 px-3 rounded-lg text-sm font-medium border transition-colors",
                         topicScore === scoreOption
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
+                          ? "border-success bg-success/10 text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-muted-foreground/40"
+                      )}
                       aria-pressed={topicScore === scoreOption}
                       aria-label={`Skor: ${scoreOption}`}
                     >
@@ -1079,12 +1106,26 @@ const InspectionForm = () => {
                     </button>
                   ))}
                 </div>
+                {topicScore === null && (
+                  <p className="text-xs text-muted-foreground mt-1.5">Puan seçimi zorunlu.</p>
+                )}
                 {(() => {
                   const prevScore = getPreviousScore(selectedTopic.topicId);
+                  const effectiveTopics: TopicInspection[] = topics.map((t) =>
+                    t.topicId === selectedTopic.topicId
+                      ? { ...t, score: topicScore ?? t.score }
+                      : t
+                  );
+                  const weightedAvg = computeWeightedAverage(effectiveTopics);
                   return (
-                    <p className="text-xs text-muted-foreground">
-                      {prevScore !== null ? `Önceki değerlendirme skoru: ${prevScore} puan` : "Önceki değerlendirme yok"}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mt-2">
+                      <p className="text-xs text-muted-foreground">
+                        {prevScore !== null ? `Önceki değerlendirme skoru: ${prevScore} puan` : "Önceki değerlendirme yok"}
+                      </p>
+                      <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                        {weightedAvg !== null ? `Ort: ${weightedAvg}` : "Ort: -"}
+                      </span>
+                    </div>
                   );
                 })()}
               </div>
@@ -1140,7 +1181,7 @@ const InspectionForm = () => {
             
             <button
               onClick={handleSaveTopic}
-              disabled={topicStatus === "not_started"}
+              disabled={!canSaveTopic}
               className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Kaydet

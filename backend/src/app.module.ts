@@ -12,6 +12,8 @@ import { UploadsModule } from './uploads/uploads.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { HarvestModule } from './harvest/harvest.module';
+import { TradersModule } from './traders/traders.module';
 
 @Module({
   controllers: [AppController],
@@ -31,6 +33,8 @@ import { PrismaModule } from './prisma/prisma.module';
     UploadsModule,
     PrescriptionsModule,
     NotificationsModule,
+    HarvestModule,
+    TradersModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -1462,6 +1462,7 @@ const AppProviderInternal = ({ children }: { children: ReactNode }) => {
 
     const refreshLatest = async () => {
       try {
+        if (typeof window !== "undefined" && window.location.pathname.startsWith("/hasat")) return;
         if (!gardens || gardens.length === 0) return;
         await Promise.allSettled(
           gardens.map((g) => loadLatestPrescriptionForCampus(g.campusId))

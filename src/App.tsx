@@ -12,6 +12,8 @@ import InspectionSummary from "./pages/InspectionSummary";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import Analysis from "./pages/Analysis";
+import HarvestList from "./pages/HarvestList";
+import HarvestFormPage from "./pages/HarvestFormPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { BackendConnectionLostModal } from "./components/BackendConnectionLostModal";
@@ -68,6 +70,16 @@ const App = () => (
           <Route path="/analiz" element={
             <ProtectedRoute>
               <Analysis />
+            </ProtectedRoute>
+          } />
+          <Route path="/hasat" element={
+            <ProtectedRoute>
+              <HarvestList />
+            </ProtectedRoute>
+          } />
+          <Route path="/hasat/:id" element={
+            <ProtectedRoute>
+              <HarvestFormPage />
             </ProtectedRoute>
           } />
           

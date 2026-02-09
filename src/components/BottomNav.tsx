@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Leaf, BarChart3 } from "lucide-react";
+import { Home, Leaf, BarChart3, Package } from "lucide-react";
 
 const BottomNav = () => {
   const location = useLocation();
@@ -7,6 +7,7 @@ const BottomNav = () => {
   const navItems = [
     { path: "/dashboard", label: "Ana Sayfa", icon: Home },
     { path: "/bahceler", label: "Bahçeler", icon: Leaf },
+    { path: "/hasat", label: "Hasat", icon: Package },
     { path: "/analiz", label: "Analiz", icon: BarChart3 },
   ];
 

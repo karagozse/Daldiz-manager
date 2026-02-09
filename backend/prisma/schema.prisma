@@ -72,11 +72,72 @@ model Garden {
   criticalWarnings CriticalWarning[]
   campus           Campus            @relation("CampusGardens", fields: [campusTenantId, campusId], references: [tenantId, id])
   inspections      Inspection[]
+  harvestEntries   HarvestEntry[]
 
   @@index([tenantId])
   @@index([campusTenantId, campusId])
   @@index([status])
   @@map("gardens")
+}
+
+model Trader {
+  id             String         @id @default(uuid())
+  tenantId       String
+  name           String
+  createdAt      DateTime       @default(now())
+  harvestEntries HarvestEntry[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([name])
+  @@map("traders")
+}
+
+model HarvestEntry {
+  id                      String         @id @default(uuid())
+  tenantId                String
+  gardenId                Int
+  traderId                String?        @map("trader_id")
+  traderName              String         @default("") @map("trader_name")
+  date                    DateTime       @db.Date
+  name                    String
+  status                  String         @default("draft") // draft | submitted
+  pricePerKg              Decimal        @default(0) @map("price_per_kg") @db.Decimal(12, 4)
+  grade1Kg                Decimal?       @map("grade1_kg") @db.Decimal(12, 4)
+  grade2Kg                Decimal?       @map("grade2_kg") @db.Decimal(12, 4)
+  thirdLabel               String?       @map("third_label")
+  thirdKg                  Decimal?      @map("third_kg") @db.Decimal(12, 4)
+  thirdPricePerKg          Decimal?      @map("third_price_per_kg") @db.Decimal(12, 4)
+  independentScaleFullKg  Decimal?      @map("independent_scale_full_kg") @db.Decimal(12, 4)
+  independentScaleEmptyKg  Decimal?      @map("independent_scale_empty_kg") @db.Decimal(12, 4)
+  traderScaleFullKg        Decimal?      @map("trader_scale_full_kg") @db.Decimal(12, 4)
+  traderScaleEmptyKg       Decimal?      @map("trader_scale_empty_kg") @db.Decimal(12, 4)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  submittedAt             DateTime?      @map("submitted_at")
+  garden                  Garden         @relation(fields: [gardenId], references: [id])
+  trader                  Trader?        @relation(fields: [traderId], references: [id])
+  photos                  HarvestPhoto[]
+
+  @@index([tenantId])
+  @@index([gardenId])
+  @@index([traderId])
+  @@index([date])
+  @@index([status])
+  @@map("harvest_entries")
+}
+
+model HarvestPhoto {
+  id          String        @id @default(uuid())
+  harvestId   String        @map("harvest_id")
+  category    String        // GENERAL | TRADER_SLIP
+  url         String
+  createdAt   DateTime      @default(now())
+  harvest     HarvestEntry  @relation(fields: [harvestId], references: [id], onDelete: Cascade)
+
+  @@index([harvestId])
+  @@index([category])
+  @@map("harvest_photos")
 }
 
 model Inspection {

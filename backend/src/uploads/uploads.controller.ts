@@ -2,15 +2,18 @@ import {
   Controller,
   Post,
   Param,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { randomUUID } from 'crypto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -26,6 +29,15 @@ function ensureUploadDir(base: string) {
     mkdirSync(base, { recursive: true });
   }
 }
+
+const imageFileFilter = (_req: any, file: { mimetype: string }, cb: (err: Error | null, accept?: boolean) => void) => {
+  const allowed = /^image\/(jpeg|jpg|png|gif|webp|heic)$/i;
+  if (allowed.test(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new BadRequestException('Invalid file type. Use image (jpeg/png/gif/webp/heic).') as any, false);
+  }
+};
 
 @Controller('uploads')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -51,14 +63,7 @@ export class UploadsController {
         },
       }),
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-      fileFilter: (_req, file, cb) => {
-        const allowed = /^image\/(jpeg|jpg|png|gif|webp|heic)$/i;
-        if (allowed.test(file.mimetype)) {
-          cb(null, true);
-        } else {
-          cb(new BadRequestException('Invalid file type. Use image (jpeg/png/gif/webp/heic).'), false);
-        }
-      },
+      fileFilter: imageFileFilter,
     }),
   )
   async uploadInspectionPhoto(
@@ -80,5 +85,60 @@ export class UploadsController {
     // Return URL path that frontend can use (relative path served as static)
     const url = `/uploads/inspections/${file.filename}`;
     return { url };
+  }
+
+  @Post('harvest-photo/:harvestId')
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: diskStorage({
+        destination: (req, _file, cb) => {
+          ensureUploadDir(UPLOAD_DIR);
+          const subdir = join(UPLOAD_DIR, 'harvests', req.params?.harvestId || 'unknown');
+          ensureUploadDir(subdir);
+          cb(null, subdir);
+        },
+        filename: (_req, file, cb) => {
+          const ext = file.originalname?.match(/\.[^.]+$/)?.[0] || '.jpg';
+          cb(null, `${randomUUID()}${ext}`);
+        },
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: imageFileFilter,
+    }),
+  )
+  async uploadHarvestPhotos(
+    @Param('harvestId') harvestId: string,
+    @Query('category') category: string,
+    @UploadedFiles() files: Array<{ filename: string }>,
+    @Tenant() tenant: TenantContext,
+  ) {
+    if (!category || !['GENERAL', 'TRADER_SLIP'].includes(category)) {
+      throw new BadRequestException('Query param category must be GENERAL or TRADER_SLIP');
+    }
+    const harvest = await this.prisma.harvestEntry.findFirst({
+      where: { id: harvestId, tenantId: tenant.tenantId },
+    });
+    if (!harvest) {
+      throw new BadRequestException(`Harvest ${harvestId} not found`);
+    }
+    if (harvest.status !== 'draft') {
+      throw new BadRequestException('Only draft harvest entries can receive photo uploads');
+    }
+    if (!files?.length) {
+      throw new BadRequestException('No files uploaded');
+    }
+    const baseUrl = `/uploads/harvests/${harvestId}`;
+    const created = await Promise.all(
+      files.map((f) =>
+        this.prisma.harvestPhoto.create({
+          data: {
+            harvestId,
+            category,
+            url: `${baseUrl}/${f.filename}`,
+          },
+        }),
+      ),
+    );
+    return { photos: created.map((p) => ({ id: p.id, url: p.url, category: p.category })) };
   }
 }
