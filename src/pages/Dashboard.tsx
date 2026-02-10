@@ -147,7 +147,10 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
+    <div
+      className="min-h-0 bg-background overflow-y-auto"
+      style={{ height: "calc(100dvh - var(--bottom-tab-height, 80px) - env(safe-area-inset-bottom, 0px))" }}
+    >
       <Header title="Genel Bakış" showNotification showProfile />
       
       <main className="px-4 py-4 max-w-lg mx-auto space-y-4">

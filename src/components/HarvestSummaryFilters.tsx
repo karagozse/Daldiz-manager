@@ -48,12 +48,12 @@ export function HarvestSummaryFilters({ filters, onChange, defaultYear }: Harves
   };
 
   const triggerClass =
-    "h-8 w-full min-w-0 py-1.5 px-2 text-sm font-medium border-0 bg-muted/30 shadow-none text-center overflow-hidden whitespace-nowrap text-ellipsis [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:block [&>span]:text-center [&>svg]:w-3 [&>svg]:h-3";
+    "h-8 w-full min-w-0 py-1 px-2 text-sm font-medium border-0 bg-muted/30 shadow-none text-center overflow-hidden whitespace-nowrap text-ellipsis [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:block [&>span]:text-center [&>svg]:w-3 [&>svg]:h-3";
 
   const itemClass = "whitespace-nowrap overflow-hidden text-ellipsis text-sm";
 
   return (
-    <div className="grid grid-cols-4 gap-2 w-full overflow-hidden px-2 py-1.5 mb-3 items-center min-w-0">
+    <div className="grid grid-cols-4 gap-2 w-full overflow-hidden py-1.5 px-2 mb-1 items-center min-w-0">
       <div className="min-w-0">
         <Select
           value={filters.year != null ? String(filters.year) : "all"}

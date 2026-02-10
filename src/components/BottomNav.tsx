@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, Leaf, BarChart3, Package } from "lucide-react";
+import { BOTTOM_TAB_HEIGHT_PX } from "@/constants/layout";
 
 const BottomNav = () => {
   const location = useLocation();
@@ -12,7 +13,7 @@ const BottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom)', height: 'calc(80px + env(safe-area-inset-bottom))' }}>
+    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom)', height: `calc(${BOTTOM_TAB_HEIGHT_PX}px + env(safe-area-inset-bottom))` }}>
       <div className="flex items-center justify-around py-3 px-4 max-w-lg mx-auto h-full" style={{ transform: 'translateY(-8px)' }}>
         {navItems.map(({ path, label, icon: Icon }) => {
           const isActive = location.pathname === path;

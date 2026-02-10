@@ -17,6 +17,7 @@ import HarvestFormPage from "./pages/HarvestFormPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { BackendConnectionLostModal } from "./components/BackendConnectionLostModal";
+import { BOTTOM_TAB_HEIGHT_PX } from "@/constants/layout";
 
 const queryClient = new QueryClient();
 
@@ -26,8 +27,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <BackendConnectionLostModal />
-        <Routes>
+        <div style={{ ["--bottom-tab-height" as string]: `${BOTTOM_TAB_HEIGHT_PX}px` } as React.CSSProperties}>
+          <BackendConnectionLostModal />
+          <Routes>
           {/* Public route - Login page */}
           <Route path="/" element={<Login />} />
           
@@ -86,6 +88,7 @@ const App = () => (
           {/* 404 - Not Found */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

@@ -3,10 +3,20 @@ import { formatDateDisplay } from "@/lib/date";
 import { getRowStatus, type HarvestSummaryRow, type HarvestRowStatus } from "@/lib/harvest";
 import { cn } from "@/lib/utils";
 
-const formatNum = (n: number | null | undefined, decimals = 2) =>
-  n != null ? (decimals === 0 ? Math.round(n) : n.toFixed(decimals)) : "—";
+/** Integer only (e.g. Kg column). */
+const formatInt = (n: number | null | undefined) =>
+  n != null ? String(Math.round(n)) : "—";
 
-/** Kritik uyarı stili: sol 4px şerit + hafif tint. danger > warning > ok. */
+/** TL/Kg and Tutar: up to 2 decimals, trim trailing zeros. Used only in this table. */
+const formatTableNumber = (value: number | null | undefined): string => {
+  if (value == null || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("tr-TR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+/** Row-level status: left strip + background. */
 const ROW_STATUS_CLASS: Record<HarvestRowStatus, string> = {
   danger: "border-l-4 border-l-destructive bg-destructive/10",
   warning: "border-l-4 border-l-warning bg-warning/10",
@@ -16,6 +26,9 @@ const ROW_STATUS_CLASS: Record<HarvestRowStatus, string> = {
 function getRowClassName(row: HarvestSummaryRow): string {
   return ROW_STATUS_CLASS[getRowStatus(row)] ?? "";
 }
+
+/** Columns: Tarih | Bahçe | Tüccar | Kg | TL/Kg | Tutar(TL) | icon. Slightly wider numeric columns for breathing room. */
+const GRID_COLUMNS = "82px minmax(0,1fr) minmax(0,1fr) 44px 48px 58px 28px";
 
 interface HarvestSummaryTableCompactProps {
   rows: HarvestSummaryRow[];
@@ -32,50 +45,73 @@ export function HarvestSummaryTableCompact({ rows, onView }: HarvestSummaryTable
   }
 
   return (
-    <table className="w-full text-xs">
-      <thead>
-        <tr className="sticky top-0 z-[19] border-b border-border bg-background">
-          <th className="text-left py-1.5 px-2 font-medium text-foreground">Tarih</th>
-          <th className="text-left py-1.5 px-2 font-medium text-foreground">Tüccar</th>
-          <th className="text-right py-1.5 px-2 font-medium text-foreground">Toplam (kg)</th>
-          <th className="text-right py-1.5 px-2 font-medium text-foreground">Fiyat (TL/kg)</th>
-          <th className="text-right py-1.5 px-2 font-medium text-foreground">Toplam Tutar (TL)</th>
-          <th className="w-8 py-1.5 px-1" aria-label="İnceleme" />
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={r.id}
-            className={cn(
-              "border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors",
-              getRowClassName(r)
-            )}
-          >
-            <td className="py-1 px-2 text-muted-foreground whitespace-nowrap">
-              {formatDateDisplay(r.harvest_date)}
-            </td>
-            <td className="py-1 px-2 text-foreground truncate max-w-[100px]" title={r.trader_name}>
-              {r.trader_name || "—"}
-            </td>
-            <td className="py-1 px-2 text-right tabular-nums">{formatNum(r.total_kg, 0)}</td>
-            <td className="py-1 px-2 text-right tabular-nums">{formatNum(r.sale_price)}</td>
-            <td className="py-1 px-2 text-right tabular-nums">
-              {r.total_amount != null && r.sale_price > 0 ? formatNum(r.total_amount) : "—"}
-            </td>
-            <td className="py-1 px-1">
-              <button
-                type="button"
-                onClick={() => onView(r.id)}
-                className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="İncele"
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div
+      className="w-full min-w-0 text-[11px] border-b border-border"
+      style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS }}
+    >
+      {/* Header row: Tarih | Bahçe | Tüccar | Kg | TL/Kg | Tutar(TL) | icon */}
+      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
+        Tarih
+      </div>
+      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
+        Bahçe
+      </div>
+      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
+        Tüccar
+      </div>
+      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-right whitespace-nowrap">
+        Kg
+      </div>
+      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-right whitespace-nowrap">
+        TL/Kg
+      </div>
+      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-right whitespace-nowrap">
+        Tutar(TL)
+      </div>
+      <div className="sticky top-0 z-[2] flex items-center justify-center px-2 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border" aria-label="İnceleme">
+        <span className="sr-only">İnceleme</span>
+      </div>
+
+      {/* Body rows: same grid template, row wrapper for background */}
+      {rows.map((r) => (
+        <div
+          key={r.id}
+          className={cn(
+            "col-span-full grid border-b border-border h-7 hover:bg-muted/30 transition-colors",
+            getRowClassName(r)
+          )}
+          style={{ gridTemplateColumns: GRID_COLUMNS }}
+        >
+          <div className="flex items-center px-2.5 py-1 text-muted-foreground text-left whitespace-nowrap min-w-0 bg-transparent overflow-hidden text-ellipsis" title={formatDateDisplay(r.harvest_date)}>
+            {formatDateDisplay(r.harvest_date)}
+          </div>
+          <div className="flex items-center px-2.5 py-1 text-foreground text-left overflow-hidden text-ellipsis whitespace-nowrap min-w-0 bg-transparent" title={r.garden_name || undefined}>
+            {r.garden_name || "—"}
+          </div>
+          <div className="flex items-center px-2.5 py-1 text-foreground text-left overflow-hidden text-ellipsis whitespace-nowrap min-w-0 bg-transparent" title={r.trader_name || undefined}>
+            {r.trader_name || "—"}
+          </div>
+          <div className="flex items-center justify-end px-2.5 py-1 tabular-nums text-right overflow-hidden text-ellipsis whitespace-nowrap bg-transparent">
+            {formatInt(r.total_kg)}
+          </div>
+          <div className="flex items-center justify-end px-2.5 py-1 tabular-nums text-right overflow-hidden text-ellipsis whitespace-nowrap bg-transparent">
+            {formatTableNumber(r.sale_price)}
+          </div>
+          <div className="flex items-center justify-end px-2.5 py-1 tabular-nums text-right overflow-hidden text-ellipsis whitespace-nowrap bg-transparent">
+            {r.total_amount != null && r.sale_price > 0 ? formatTableNumber(r.total_amount) : "—"}
+          </div>
+          <div className="flex items-center justify-center px-1 py-1 shrink-0 bg-transparent">
+            <button
+              type="button"
+              onClick={() => onView(r.id)}
+              className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground inline-flex"
+              aria-label="İncele"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

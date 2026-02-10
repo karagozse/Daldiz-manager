@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import {
   getHarvest,
@@ -22,6 +22,11 @@ import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import { getPhotoUrl } from "@/lib/photoUtils";
 import { compressImageToJpeg } from "@/lib/imageUtils";
+import {
+  type FormPhotoItem,
+  normalizeExistingPhotos,
+  formPhotoFromFile,
+} from "@/lib/harvestFormPhotos";
 import { Save, Send, Trash2, Info, Camera, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -48,14 +53,18 @@ function formatDateInput(d: Date): string {
 
 const HarvestFormPage = () => {
   const { id: rawId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const revizeFromId = searchParams.get("revizeFromId")?.trim() || null;
   const id = rawId ?? "";
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { gardens } = useApp();
-  const isNew = id === "yeni" || id === "" || id === "undefined" || id === "null";
+  const { gardens, activeRole } = useApp();
+  const isRevizeMode = !!revizeFromId;
+  const isNew = (id === "yeni" || id === "" || id === "undefined" || id === "null") && !isRevizeMode;
+  const isAdmin = activeRole === "ADMIN" || activeRole === "SUPER_ADMIN";
 
   const [entry, setEntry] = useState<HarvestEntry | null>(null);
-  const [loading, setLoading] = useState(!isNew);
+  const [loading, setLoading] = useState(!isNew || isRevizeMode);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -81,12 +90,75 @@ const HarvestFormPage = () => {
   const [traderScaleFullKg, setTraderScaleFullKg] = useState<string>("");
   const [traderScaleEmptyKg, setTraderScaleEmptyKg] = useState<string>("");
 
+  /** Revize modunda foto state (existing + new + deleted). Create modda entry.photos kullanılır. */
+  const [traderSlipFormPhotos, setTraderSlipFormPhotos] = useState<FormPhotoItem[]>([]);
+  const [generalFormPhotos, setGeneralFormPhotos] = useState<FormPhotoItem[]>([]);
+
   const generalInputRef = useRef<HTMLInputElement>(null);
   const traderSlipInputRef = useRef<HTMLInputElement>(null);
   const traderSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Revize modu: revizeFromId ile hasat yükle ve formu doldur
   useEffect(() => {
-    if (isNew || !id) return;
+    if (!revizeFromId) return;
+    if (!isAdmin) {
+      navigate("/hasat", { replace: true });
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const data = await getHarvest(revizeFromId);
+        if (cancelled) return;
+        if (data.status !== "submitted") {
+          toast({ title: "Hata", description: "Sadece kapanmış hasat revize edilebilir.", variant: "destructive" });
+          navigate("/hasat");
+          return;
+        }
+        setEntry(data);
+        setDate(formatDateInput(new Date(data.date)));
+        setGardenId(data.gardenId);
+        setTraderName(data.traderName ?? "");
+        setPricePerKg(data.pricePerKg != null ? String(data.pricePerKg) : "");
+        setGrade1Kg(data.grade1Kg != null ? String(data.grade1Kg) : "");
+        setGrade2Kg(data.grade2Kg != null ? String(data.grade2Kg) : "");
+        setThirdLabel(data.thirdLabel ?? "");
+        setThirdKg(data.thirdKg != null ? String(data.thirdKg) : "");
+        setThirdPricePerKg(data.thirdPricePerKg != null ? String(data.thirdPricePerKg) : "");
+        setIndependentScaleFullKg(data.independentScaleFullKg != null ? String(data.independentScaleFullKg) : "");
+        setIndependentScaleEmptyKg(data.independentScaleEmptyKg != null ? String(data.independentScaleEmptyKg) : "");
+        setTraderScaleFullKg(data.traderScaleFullKg != null ? String(data.traderScaleFullKg) : "");
+        setTraderScaleEmptyKg(data.traderScaleEmptyKg != null ? String(data.traderScaleEmptyKg) : "");
+        const photos = data.photos ?? [];
+        const resolveUrl = (url: string) => getPhotoUrl(url) ?? url;
+        setTraderSlipFormPhotos(
+          normalizeExistingPhotos(
+            photos.filter((p: { category: string }) => p.category === "TRADER_SLIP"),
+            resolveUrl
+          )
+        );
+        setGeneralFormPhotos(
+          normalizeExistingPhotos(
+            photos.filter((p: { category: string }) => p.category === "GENERAL"),
+            resolveUrl
+          )
+        );
+      } catch (e) {
+        if (!cancelled) {
+          toast({ title: "Hata", description: "Hasat yüklenemedi.", variant: "destructive" });
+          navigate("/hasat");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [revizeFromId, isAdmin, navigate, toast]);
+
+  // Taslak / mevcut hasat düzenleme: id ile yükle (revize modu değilse)
+  useEffect(() => {
+    if (isNew || !id || isRevizeMode) return;
     let cancelled = false;
     (async () => {
       try {
@@ -117,7 +189,22 @@ const HarvestFormPage = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [id, isNew, navigate, toast]);
+  }, [id, isNew, isRevizeMode, navigate, toast]);
+
+  // Revize modunda oluşturulan object URL'leri unmount'ta revoke et
+  const formPhotosRef = useRef<FormPhotoItem[]>([]);
+  formPhotosRef.current = [...traderSlipFormPhotos, ...generalFormPhotos];
+  useEffect(() => {
+    return () => {
+      formPhotosRef.current
+        .filter((p) => p.status === "new" && p.previewUrl)
+        .forEach((p) => {
+          try {
+            URL.revokeObjectURL(p.previewUrl);
+          } catch (_) {}
+        });
+    };
+  }, []);
 
   useEffect(() => {
     if (entry && pendingTraderSlipUpload) {
@@ -137,6 +224,14 @@ const HarvestFormPage = () => {
   const generalPhotos = photos.filter((p) => p.category === "GENERAL");
   const traderSlipPhotos = photos.filter((p) => p.category === "TRADER_SLIP");
 
+  const visibleTraderSlipPhotos = isRevizeMode
+    ? traderSlipFormPhotos.filter((p) => p.status !== "deleted")
+    : traderSlipPhotos;
+  const visibleGeneralPhotos = isRevizeMode
+    ? generalFormPhotos.filter((p) => p.status !== "deleted")
+    : generalPhotos;
+  const hasTraderSlipPhoto = visibleTraderSlipPhotos.length >= 1;
+
   const num = (s: string) => (s === "" ? null : parseFloat(s));
   const hasGarden = gardenId !== "";
   const hasDate = date !== "";
@@ -144,7 +239,6 @@ const HarvestFormPage = () => {
   const priceOk = num(pricePerKg) != null && (num(pricePerKg) ?? 0) > 0;
   const grade1Ok = num(grade1Kg) != null && (num(grade1Kg) ?? 0) > 0;
   const grade2Ok = num(grade2Kg) != null && (num(grade2Kg) ?? 0) >= 0;
-  const hasTraderSlipPhoto = traderSlipPhotos.length >= 1;
   const section1Complete = hasDate && hasGarden && hasTrader && priceOk;
   const section2Complete = grade1Ok && grade2Ok && hasTraderSlipPhoto;
   // Default date alone does not make form dirty (Kaydet pasif when only date is filled)
@@ -169,6 +263,12 @@ const HarvestFormPage = () => {
     section2Complete &&
     hasTraderSlipPhoto &&
     entry?.status === "draft";
+  const canRevizeSubmit =
+    isRevizeMode &&
+    !!entry &&
+    section1Complete &&
+    section2Complete &&
+    hasTraderSlipPhoto;
   const hasDraft = !isNew && entry?.status === "draft";
 
   const handleTraderInputChange = (value: string) => {
@@ -304,6 +404,61 @@ const HarvestFormPage = () => {
     }
   };
 
+  const handleRevizeSubmit = async () => {
+    if (!canRevizeSubmit || !revizeFromId) return;
+    const gid = gardenId === "" ? undefined : Number(gardenId);
+    if (gid == null) {
+      toast({ title: "Bahçe seçin", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const deletedIds = [
+        ...traderSlipFormPhotos.filter((p) => p.status === "deleted" && p.id),
+        ...generalFormPhotos.filter((p) => p.status === "deleted" && p.id),
+      ].map((p) => p.id!);
+      const newTraderFiles = traderSlipFormPhotos
+        .filter((p) => p.status === "new" && p.file)
+        .map((p) => p.file!);
+      const newGeneralFiles = generalFormPhotos
+        .filter((p) => p.status === "new" && p.file)
+        .map((p) => p.file!);
+
+      for (const photoId of deletedIds) {
+        await deleteHarvestPhoto(revizeFromId, photoId);
+      }
+      if (newTraderFiles.length > 0) {
+        await uploadHarvestPhotos(revizeFromId, "TRADER_SLIP", newTraderFiles);
+      }
+      if (newGeneralFiles.length > 0) {
+        await uploadHarvestPhotos(revizeFromId, "GENERAL", newGeneralFiles);
+      }
+
+      await updateHarvest(revizeFromId, {
+        date,
+        gardenId: gid,
+        traderName: traderName.trim() || undefined,
+        pricePerKg: num(pricePerKg) ?? undefined,
+        grade1Kg: num(grade1Kg) ?? undefined,
+        grade2Kg: num(grade2Kg) ?? undefined,
+        thirdLabel: thirdLabel || undefined,
+        thirdKg: num(thirdKg) ?? undefined,
+        thirdPricePerKg: num(thirdPricePerKg) ?? undefined,
+        independentScaleFullKg: num(independentScaleFullKg) ?? undefined,
+        independentScaleEmptyKg: num(independentScaleEmptyKg) ?? undefined,
+        traderScaleFullKg: num(traderScaleFullKg) ?? undefined,
+        traderScaleEmptyKg: num(traderScaleEmptyKg) ?? undefined,
+      });
+      toast({ title: "Hasat revize edildi" });
+      navigate("/hasat");
+    } catch (e: any) {
+      const msg = e?.message ?? e?.response?.data?.message ?? "Revize kaydedilemedi.";
+      toast({ title: "Hata", description: msg, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handlePhotoUpload = async (category: "GENERAL" | "TRADER_SLIP", files: FileList | null) => {
     if (!files?.length || !entry) return;
     const harvestId = entry.id;
@@ -351,6 +506,55 @@ const HarvestFormPage = () => {
       toast({ title: "Fotoğraf silindi" });
     } catch (e: any) {
       toast({ title: "Hata", description: e?.message ?? "Silinemedi.", variant: "destructive" });
+    }
+  };
+
+  const handleRemoveRevizePhoto = (category: "TRADER_SLIP" | "GENERAL", item: FormPhotoItem) => {
+    if (item.status === "new") {
+      try {
+        URL.revokeObjectURL(item.previewUrl);
+      } catch (_) {}
+      if (category === "TRADER_SLIP") {
+        setTraderSlipFormPhotos((prev) => prev.filter((p) => p.previewUrl !== item.previewUrl));
+      } else {
+        setGeneralFormPhotos((prev) => prev.filter((p) => p.previewUrl !== item.previewUrl));
+      }
+      return;
+    }
+    if (item.status === "existing" && item.id) {
+      if (category === "TRADER_SLIP") {
+        setTraderSlipFormPhotos((prev) =>
+          prev.map((p) => (p.id === item.id ? { ...p, status: "deleted" as const } : p))
+        );
+      } else {
+        setGeneralFormPhotos((prev) =>
+          prev.map((p) => (p.id === item.id ? { ...p, status: "deleted" as const } : p))
+        );
+      }
+    }
+  };
+
+  const handleRevizePhotoSelect = async (
+    category: "TRADER_SLIP" | "GENERAL",
+    files: FileList | null
+  ) => {
+    if (!files?.length) return;
+    setUploading(category);
+    try {
+      const compressed = await Promise.all(
+        Array.from(files).map((f) =>
+          compressImageToJpeg(f, { maxWidth: 1600, maxHeight: 1600, quality: 0.8 })
+        )
+      );
+      const newItems = compressed.map((f) => formPhotoFromFile(f));
+      if (category === "TRADER_SLIP") {
+        setTraderSlipFormPhotos((prev) => [...prev, ...newItems]);
+      } else {
+        setGeneralFormPhotos((prev) => [...prev, ...newItems]);
+      }
+      toast({ title: "Fotoğraf eklendi", description: `${newItems.length} adet` });
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -438,7 +642,7 @@ const HarvestFormPage = () => {
     );
   }
 
-  const isClosed = entry?.status === "submitted";
+  const isClosed = entry?.status === "submitted" && !isRevizeMode;
   const displayEntry: HarvestEntry | null = entry
     ? {
         ...entry,
@@ -478,11 +682,16 @@ const HarvestFormPage = () => {
   return (
     <div className="min-h-screen bg-background pb-32">
       <HeaderWithBack
-        title={isNew ? "Yeni Hasat" : entry?.name ?? "Hasat"}
+        title={isRevizeMode ? "Hasat Revize" : isNew ? "Yeni Hasat" : entry?.name ?? "Hasat"}
         onBack={() => navigate("/hasat")}
       />
       <main className="px-4 py-4 max-w-lg mx-auto space-y-4">
-        {isClosed && (
+        {isRevizeMode && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm text-foreground">
+            Bu hasat kapalı. Admin revize modu.
+          </div>
+        )}
+        {isClosed && !isRevizeMode && (
           <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-foreground">
             Hasat kapanmıştır. Düzenleme yapılamaz.
           </div>
@@ -680,12 +889,19 @@ const HarvestFormPage = () => {
               capture="environment"
               multiple
               className="hidden"
-              onChange={(e) => handlePhotoUpload("TRADER_SLIP", e.target.files)}
+              onChange={(e) => {
+                if (isRevizeMode) {
+                  handleRevizePhotoSelect("TRADER_SLIP", e.target.files);
+                  e.target.value = "";
+                } else {
+                  handlePhotoUpload("TRADER_SLIP", e.target.files);
+                }
+              }}
               disabled={!!uploading || isClosed}
             />
             <button
               type="button"
-              onClick={ensureDraftThenOpenTraderSlip}
+              onClick={isRevizeMode ? () => traderSlipInputRef.current?.click() : ensureDraftThenOpenTraderSlip}
               disabled={!!uploading || isClosed}
               className={cn(
                 "w-full h-28 md:h-32 rounded-xl border-2 border-dashed border-muted-foreground/40 bg-muted/50 hover:border-primary/50 hover:bg-muted transition-colors flex flex-col items-center justify-center gap-2",
@@ -698,30 +914,51 @@ const HarvestFormPage = () => {
                 {uploading === "TRADER_SLIP" ? "Yükleniyor..." : "Fotoğraf ekle"}
               </span>
             </button>
-            {traderSlipPhotos.length > 0 && (
+            {visibleTraderSlipPhotos.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-3">
-                {traderSlipPhotos.map((p) => (
-                  <div key={p.id} className="relative group">
-                    <a
-                      href={getPhotoUrl(p.url) ?? "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50 transition-shadow"
-                    >
-                      <img src={getPhotoUrl(p.url) ?? ""} alt="" className="h-full w-full object-cover" />
-                    </a>
-                    {!isClosed && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTraderSlipPhoto(p)}
-                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow border border-border hover:bg-destructive/90"
-                        aria-label="Fotoğrafı kaldır"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {isRevizeMode
+                  ? visibleTraderSlipPhotos.map((item) => (
+                      <div key={item.id ?? item.previewUrl} className="relative group">
+                        <a
+                          href={item.previewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50 transition-shadow"
+                        >
+                          <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRevizePhoto("TRADER_SLIP", item)}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow border border-border hover:bg-destructive/90"
+                          aria-label="Fotoğrafı kaldır"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))
+                  : traderSlipPhotos.map((p) => (
+                      <div key={p.id} className="relative group">
+                        <a
+                          href={getPhotoUrl(p.url) ?? "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50 transition-shadow"
+                        >
+                          <img src={getPhotoUrl(p.url) ?? ""} alt="" className="h-full w-full object-cover" />
+                        </a>
+                        {!isClosed && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTraderSlipPhoto(p)}
+                            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow border border-border hover:bg-destructive/90"
+                            aria-label="Fotoğrafı kaldır"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
               </div>
             )}
           </div>
@@ -779,12 +1016,19 @@ const HarvestFormPage = () => {
                 capture="environment"
                 multiple
                 className="hidden"
-                onChange={(e) => handlePhotoUpload("GENERAL", e.target.files)}
+                onChange={(e) => {
+                  if (isRevizeMode) {
+                    handleRevizePhotoSelect("GENERAL", e.target.files);
+                    e.target.value = "";
+                  } else {
+                    handlePhotoUpload("GENERAL", e.target.files);
+                  }
+                }}
                 disabled={!!uploading || isClosed}
               />
               <button
                 type="button"
-                onClick={ensureDraftThenOpenGeneral}
+                onClick={isRevizeMode ? () => generalInputRef.current?.click() : ensureDraftThenOpenGeneral}
                 disabled={!!uploading || isClosed}
                 className={cn(
                   "w-full h-28 md:h-32 rounded-xl border-2 border-dashed border-muted-foreground/40 bg-muted/50 hover:border-primary/50 hover:bg-muted transition-colors flex flex-col items-center justify-center gap-2",
@@ -797,63 +1041,88 @@ const HarvestFormPage = () => {
                   {uploading === "GENERAL" ? "Yükleniyor..." : "Fotoğraf ekle"}
                 </span>
               </button>
-              {generalPhotos.length > 0 && (
+              {visibleGeneralPhotos.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
-                  {generalPhotos.map((p) => (
-                    <div key={p.id} className="relative group">
-                      <a
-                        href={getPhotoUrl(p.url) ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50 transition-shadow"
-                      >
-                        <img src={getPhotoUrl(p.url) ?? ""} alt="" className="h-full w-full object-cover" />
-                      </a>
-                      {!isClosed && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveGeneralPhoto(p)}
-                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow border border-border hover:bg-destructive/90"
-                          aria-label="Fotoğrafı kaldır"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  {isRevizeMode
+                    ? visibleGeneralPhotos.map((item) => (
+                        <div key={item.id ?? item.previewUrl} className="relative group">
+                          <a
+                            href={item.previewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50 transition-shadow"
+                          >
+                            <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRevizePhoto("GENERAL", item)}
+                            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow border border-border hover:bg-destructive/90"
+                            aria-label="Fotoğrafı kaldır"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))
+                    : generalPhotos.map((p) => (
+                        <div key={p.id} className="relative group">
+                          <a
+                            href={getPhotoUrl(p.url) ?? "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50 transition-shadow"
+                          >
+                            <img src={getPhotoUrl(p.url) ?? ""} alt="" className="h-full w-full object-cover" />
+                          </a>
+                          {!isClosed && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveGeneralPhoto(p)}
+                              className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow border border-border hover:bg-destructive/90"
+                              aria-label="Fotoğrafı kaldır"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                 </div>
               )}
             </div>
         </div>
 
-        {/* Bottom Actions - hidden when harvest is closed (read-only) */}
+        {/* Bottom Actions - hidden when harvest is closed (read-only). Revize modunda sadece Gönder. */}
       {!isClosed && (
         <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4">
           <div className="max-w-lg mx-auto space-y-2">
             <div className="flex gap-3">
-              <button
-                onClick={() => hasDraft && setIsDeleteDialogOpen(true)}
-                disabled={!hasDraft || isDeleting || saving || submitting}
-                className="flex items-center justify-center gap-2 px-4 py-3 border border-destructive/30 bg-destructive/10 text-destructive rounded-xl font-medium hover:bg-destructive/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Trash2 size={18} />
-                <span>{isDeleting ? "Siliniyor..." : "Sil"}</span>
-              </button>
-              <button
-                onClick={handleSaveDraft}
-                disabled={!canSaveDraft || saving}
-                className="flex-1 flex items-center justify-center gap-2 py-3 border border-border rounded-xl font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save size={18} />
-                <span>{saving ? "Kaydediliyor..." : "Kaydet"}</span>
-              </button>
+              {!isRevizeMode && (
+                <button
+                  onClick={() => hasDraft && setIsDeleteDialogOpen(true)}
+                  disabled={!hasDraft || isDeleting || saving || submitting}
+                  className="flex items-center justify-center gap-2 px-4 py-3 border border-destructive/30 bg-destructive/10 text-destructive rounded-xl font-medium hover:bg-destructive/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={18} />
+                  <span>{isDeleting ? "Siliniyor..." : "Sil"}</span>
+                </button>
+              )}
+              {!isRevizeMode && (
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={!canSaveDraft || saving}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 border border-border rounded-xl font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save size={18} />
+                  <span>{saving ? "Kaydediliyor..." : "Kaydet"}</span>
+                </button>
+              )}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="flex-1 flex min-w-0">
+                    <span className={isRevizeMode ? "flex-1 flex min-w-0" : "flex-1 flex min-w-0"}>
                       <button
-                        onClick={handleSubmit}
-                        disabled={!canSubmit || submitting}
+                        onClick={isRevizeMode ? handleRevizeSubmit : handleSubmit}
+                        disabled={isRevizeMode ? !canRevizeSubmit || submitting : !canSubmit || submitting}
                         className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Send size={18} />
@@ -861,9 +1130,14 @@ const HarvestFormPage = () => {
                       </button>
                     </span>
                   </TooltipTrigger>
-                  {!canSubmit && (
+                  {!isRevizeMode && !canSubmit && (
                     <TooltipContent side="top" className="max-w-[260px]">
                       Gönder için tüccar fişi ve zorunlu alanlar gerekli.
+                    </TooltipContent>
+                  )}
+                  {isRevizeMode && !canRevizeSubmit && (
+                    <TooltipContent side="top" className="max-w-[260px]">
+                      Revize için tüccar fişi ve zorunlu alanlar gerekli.
                     </TooltipContent>
                   )}
                 </Tooltip>

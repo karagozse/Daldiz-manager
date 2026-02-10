@@ -15,7 +15,8 @@ import {
   type HarvestSummaryRow,
 } from "@/lib/harvest";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Maximize2 } from "lucide-react";
+import { Plus, Maximize2, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { formatDateDisplay } from "@/lib/date";
 import { HarvestSummaryFilters } from "@/components/HarvestSummaryFilters";
 import { HarvestSummaryTableCompact } from "@/components/HarvestSummaryTableCompact";
@@ -23,6 +24,81 @@ import { HarvestSummaryModal } from "@/components/HarvestSummaryModal";
 import { HarvestDetailModal } from "@/components/HarvestDetailModal";
 
 const DRAFTS_BOX_MAX_H = "12rem";
+
+function csvCell(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  const str = String(val);
+  if (str.includes(";") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function toCsvRow(arr: unknown[]): string {
+  return arr.map(csvCell).join(";");
+}
+
+function trToAscii(s: string): string {
+  return s
+    .replace(/ğ/g, "g")
+    .replace(/Ğ/g, "G")
+    .replace(/ü/g, "u")
+    .replace(/Ü/g, "U")
+    .replace(/ş/g, "s")
+    .replace(/Ş/g, "S")
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "I")
+    .replace(/ö/g, "o")
+    .replace(/Ö/g, "O")
+    .replace(/ç/g, "c")
+    .replace(/Ç/g, "C");
+}
+
+function formatDateOnly(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") {
+    if (val.length >= 10 && val.includes("T")) return val.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  }
+  const d = new Date(val as string | number | Date);
+  if (Number.isNaN(d.getTime())) return String(val);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function toNumber(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "number" && Number.isFinite(val)) return val;
+  if (typeof val === "string") {
+    const s = val.trim();
+    if (!s || s === "—" || s === "-") return null;
+    const cleaned = s.replace("%", "").trim();
+    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function format1dp(val: unknown): string {
+  const n = toNumber(val);
+  if (n === null) return "";
+  return n.toFixed(1);
+}
+
+function format0dp(val: unknown): string {
+  const n = toNumber(val);
+  if (n === null) return "";
+  return String(Math.round(n));
+}
+
+function format1dpComma(val: unknown): string {
+  const n = toNumber(val);
+  if (n === null) return "";
+  return n.toFixed(1).replace(".", ",");
+}
 
 function HarvestIcmaliOzet({
   totals,
@@ -48,41 +124,34 @@ function HarvestIcmaliOzet({
   const kantarLabel =
     scaleRows.length === 0 ? "Yok" : kantarFarkPct != null ? `%${kantarFarkPct.toFixed(1)}` : "–";
   return (
-    <div className="space-y-2">
-      <p className="text-sm font-semibold text-foreground">Özet</p>
-      <table className="w-full text-sm">
-        <tbody>
-          <tr>
-            <td className="text-muted-foreground py-0.5">Toplam kg</td>
-            <td className="text-right">{t?.sum_total_kg != null ? `${t.sum_total_kg} kg` : "–"}</td>
-          </tr>
-          <tr>
-            <td className="text-muted-foreground py-0.5">Toplam gelir (TL)</td>
-            <td className="text-right">
-              {t?.sum_net_total != null
-                ? `${t.sum_net_total.toLocaleString("tr-TR")} TL`
-                : "–"}
-            </td>
-          </tr>
-          <tr>
-            <td className="text-muted-foreground py-0.5">Ortalama fiyat (TL/kg)</td>
-            <td className="text-right">
-              {avgPrice != null ? `${avgPrice.toFixed(2)}` : "–"}
-            </td>
-          </tr>
-          <tr>
-            <td className="text-muted-foreground py-0.5">2. oran (%)</td>
-            <td className="text-right">
-              {t?.second_ratio_total != null ? `%${t.second_ratio_total.toFixed(1)}` : "–"}
-            </td>
-          </tr>
-          <tr>
-            <td className="text-muted-foreground py-0.5">Kantar farkı (%)</td>
-            <td className="text-right">{kantarLabel}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <table className="w-full text-sm leading-none">
+      <tbody>
+        <tr className="leading-tight">
+          <td className="text-xs text-muted-foreground py-0.5 align-baseline">Toplam kg</td>
+          <td className="text-right text-sm font-semibold py-0.5 align-baseline">{t?.sum_total_kg != null ? `${t.sum_total_kg} kg` : "–"}</td>
+        </tr>
+        <tr className="leading-tight">
+          <td className="text-xs text-muted-foreground py-0.5 align-baseline">Ortalama fiyat (TL/kg)</td>
+          <td className="text-right text-sm font-semibold py-0.5 align-baseline">{avgPrice != null ? avgPrice.toFixed(2) : "–"}</td>
+        </tr>
+        <tr className="leading-tight">
+          <td className="text-xs text-muted-foreground py-0.5 align-baseline">2. oran (%)</td>
+          <td className="text-right text-sm font-semibold py-0.5 align-baseline">
+            {t?.second_ratio_total != null ? `%${t.second_ratio_total.toFixed(1)}` : "–"}
+          </td>
+        </tr>
+        <tr className="leading-tight">
+          <td className="text-xs text-muted-foreground py-0.5 align-baseline">Kantar farkı (%)</td>
+          <td className="text-right text-sm font-semibold py-0.5 align-baseline">{kantarLabel}</td>
+        </tr>
+        <tr className="leading-tight">
+          <td className="text-xs text-muted-foreground py-0.5 align-baseline">Toplam gelir (TL)</td>
+          <td className="text-right text-sm font-semibold py-0.5 align-baseline">
+            {t?.sum_net_total != null ? `${t.sum_net_total.toLocaleString("tr-TR")} TL` : "–"}
+          </td>
+        </tr>
+      </tbody>
+    </table>
   );
 }
 
@@ -158,22 +227,98 @@ const HarvestList = () => {
 
   const drafts = entries.filter((e) => e.status === "draft");
 
+  const handleCsvExport = () => {
+    const rows = summaryData?.rows ?? [];
+    if (rows.length === 0) return;
+    const t = summaryData?.totals ?? null;
+    const totalKg = t?.sum_total_kg ?? 0;
+    const totalIncome = t?.sum_net_total ?? 0;
+    const avgPrice = totalKg > 0 && totalIncome != null ? totalIncome / totalKg : null;
+    const secondQualityRate =
+      t?.second_ratio_total != null ? t.second_ratio_total : null;
+    const scaleRows = rows.filter(
+      (r) => r?.scale_diff != null && r.scale_diff > 0
+    );
+    const sumScaleDiff = scaleRows.reduce((s, r) => s + (r.scale_diff ?? 0), 0);
+    const sumScaleGap = scaleRows.reduce((s, r) => s + (r.scale_gap ?? 0), 0);
+    const kantarRate =
+      scaleRows.length > 0 && sumScaleDiff > 0 && sumScaleGap != null
+        ? (Math.abs(sumScaleGap) / sumScaleDiff) * 100
+        : null;
+
+    const lines: string[] = [];
+    lines.push("sep=;");
+    lines.push("HASAT_ICMALI");
+    lines.push("");
+    lines.push(
+      toCsvRow([
+        "Tarih",
+        "Tuccar",
+        "Toplam_kg",
+        "Fiyat_TL_kg",
+        "Toplam_Tutar_TL",
+      ])
+    );
+    rows.forEach((r) => {
+      lines.push(
+        toCsvRow([
+          formatDateOnly(r.harvest_date),
+          trToAscii(String(r.trader_name ?? "")),
+          r.total_kg ?? "",
+          r.sale_price ?? "",
+          r.total_amount ?? "",
+        ])
+      );
+    });
+    lines.push("");
+    lines.push("OZET");
+    lines.push("");
+    lines.push(toCsvRow(["Toplam_kg", format0dp(totalKg)]));
+    lines.push(toCsvRow(["Toplam_gelir_TL", format0dp(totalIncome)]));
+    lines.push(toCsvRow(["Ortalama_fiyat_TL_kg", format1dpComma(avgPrice)]));
+    lines.push(toCsvRow(["Ikinci_oran_yuzde", format1dpComma(secondQualityRate)]));
+    lines.push(toCsvRow(["Kantar_farki_yuzde", format1dpComma(kantarRate)]));
+
+    const csvContent = lines.join("\n");
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const fileName =
+      "hasat-icmali-" +
+      now.toISOString().slice(0, 16).replace("T", "-") +
+      ".csv";
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="h-dvh overflow-hidden flex flex-col bg-background">
+    <div
+      className="min-h-0 bg-background overflow-y-auto"
+      style={{ height: "calc(100dvh - var(--bottom-tab-height, 80px) - env(safe-area-inset-bottom, 0px))" }}
+    >
       <Header title="Hasat" />
-      <main className="px-4 py-4 max-w-6xl mx-auto flex flex-col gap-4 flex-1 min-h-0 w-full overflow-hidden pb-24">
+      <main className="px-4 py-4 max-w-6xl mx-auto flex flex-col gap-4 w-full">
         <button
+          type="button"
           onClick={() => navigate("/hasat/yeni")}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-xl font-medium shrink-0"
+          className="w-full card-elevated p-4 flex items-center justify-center gap-2 text-primary font-medium hover:bg-primary/5 transition-colors shrink-0"
+          aria-label="Yeni Hasat Gir"
         >
           <Plus size={20} />
-          Yeni Hasat Gir
+          <span>Yeni Hasat Gir</span>
         </button>
 
         {loading ? (
           <p className="text-sm text-muted-foreground text-center py-8">Yükleniyor...</p>
         ) : (
-          <div className="flex flex-col flex-1 min-h-0 gap-4">
+          <div className="flex flex-col gap-4">
             {/* Taslaklar - tek kart, kritik uyarı ile aynı padding */}
             {drafts.length > 0 && (
               <div className="rounded-xl border border-border bg-card overflow-hidden p-0 shrink-0">
@@ -227,60 +372,66 @@ const HarvestList = () => {
               </div>
             )}
 
-            {/* Hasat İcmali - 3 parça: header (filtre+tablo başlığı) | body (sadece satırlar scroll) | footer (özet sticky) */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden p-0 flex flex-col flex-1 min-h-0">
-              {/* A) Başlık + sticky filtre - flex: 0 0 auto */}
+            {/* Hasat İcmali - table and summary scroll together with page; same bottom gap as Dashboard (main py-4) */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden p-0">
+              {/* A) Başlık + filtre */}
               <div className="flex-none">
-                <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between gap-2">
+                <div className="px-3 py-2 border-b border-border bg-muted/20 flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-foreground">Hasat İcmali</p>
-                  <button
-                    type="button"
-                    onClick={() => setSummaryModalOpen(true)}
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Genişlet"
-                    title="Detay tablosunu aç"
-                  >
-                    <Maximize2 className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCsvExport}
+                      title="Excel'e Aktar"
+                      disabled={!summaryData?.rows?.length}
+                      className="h-8 w-8"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setSummaryModalOpen(true)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="Genişlet"
+                      title="Detay tablosunu aç"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="sticky top-0 z-[20] bg-card pt-3">
-<HarvestSummaryFilters
-                  filters={summaryFilters}
-                  onChange={setSummaryFilters}
-                  defaultYear={getDefaultHarvestYear()}
-                />
+                <div className="bg-card pt-1 pb-0">
+                  <HarvestSummaryFilters
+                    filters={summaryFilters}
+                    onChange={setSummaryFilters}
+                    defaultYear={getDefaultHarvestYear()}
+                  />
                 </div>
               </div>
-              {/* B) Sadece satırlar scroll - flex: 1 1 auto; min-height: 0; overflow-y: auto */}
-              <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-4">
-                {summaryLoading ? (
-                  <p className="text-sm text-muted-foreground text-center py-6 flex-none">
-                    Yükleniyor...
-                  </p>
-                ) : summaryData ? (
-                  <div
-                    className="flex-1 min-h-0 overflow-y-auto overscroll-behavior-contain -mx-4 px-4"
-                    style={{ minHeight: 0 }}
-                  >
+              {/* B) Table + summary in flow (no inner scroll; page scrolls) */}
+              {summaryLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Yükleniyor...
+                </p>
+              ) : summaryData ? (
+                <>
+                  <div className="overflow-x-hidden w-full">
                     <HarvestSummaryTableCompact
                       rows={summaryData.rows ?? []}
                       onView={(id) => setDetailModalId(id)}
                     />
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-6 flex-none">
-                    Hasat icmal verisi yok.
-                  </p>
-                )}
-              </div>
-              {/* C) Özet - flex: 0 0 auto; sticky bottom; tab bar üstünde */}
-              {summaryData && (
-                <div className="sticky bottom-0 z-[20] flex-none bg-card border-t border-border pt-3 px-4 pb-4">
-                  <HarvestIcmaliOzet
-                    totals={summaryData.totals ?? null}
-                    rows={summaryData.rows ?? []}
-                  />
-                </div>
+                  <div className="bg-card border-t border-border/40 pt-1.5 pb-1.5 px-3">
+                    <HarvestIcmaliOzet
+                      totals={summaryData.totals ?? null}
+                      rows={summaryData.rows ?? []}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Hasat icmal verisi yok.
+                </p>
               )}
             </div>
 
@@ -290,6 +441,8 @@ const HarvestList = () => {
                 onClose={() => setSummaryModalOpen(false)}
                 rows={summaryData.rows ?? []}
                 totals={summaryData.totals}
+                initialYear={summaryFilters.year ?? getDefaultHarvestYear()}
+                onYearChange={(y) => setSummaryFilters((prev) => ({ ...prev, year: y }))}
                 onView={(id) => {
                   setSummaryModalOpen(false);
                   setDetailModalId(id);
@@ -300,6 +453,10 @@ const HarvestList = () => {
               harvestId={detailModalId}
               open={detailModalId != null}
               onClose={() => setDetailModalId(null)}
+              onRevised={() => {
+                fetchList();
+                fetchSummary();
+              }}
             />
 
             {drafts.length === 0 && !summaryData?.rows?.length && (

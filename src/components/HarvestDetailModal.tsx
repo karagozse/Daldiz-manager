@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { X, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { getHarvest, type HarvestEntry } from "@/lib/harvest";
 import {
   harvestTotalKg,
@@ -22,12 +25,20 @@ interface HarvestDetailModalProps {
   harvestId: string | null;
   open: boolean;
   onClose: () => void;
+  /** Called after admin successfully revizes a closed harvest (so parent can refetch list/summary) */
+  onRevised?: () => void;
 }
 
 export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailModalProps) {
-  const { gardens } = useApp();
+  const { gardens, activeRole } = useApp();
+  const navigate = useNavigate();
   const [entry, setEntry] = useState<HarvestEntry | null>(null);
   const [loading, setLoading] = useState(false);
+  const [photoViewerUrl, setPhotoViewerUrl] = useState<string | null>(null);
+
+  const isAdmin = activeRole === "ADMIN" || activeRole === "SUPER_ADMIN";
+  const isLocked = entry?.status === "submitted";
+  const showRevizeButton = isLocked && isAdmin;
 
   useEffect(() => {
     if (!open || !harvestId) {
@@ -40,6 +51,12 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
       .catch(() => setEntry(null))
       .finally(() => setLoading(false));
   }, [open, harvestId]);
+
+  const handleRevizeClick = () => {
+    if (!entry?.id) return;
+    onClose();
+    navigate(`/hasat/yeni?revizeFromId=${encodeURIComponent(entry.id)}`);
+  };
 
   if (!open) return null;
 
@@ -70,8 +87,9 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
   const generalPhotos = entry?.photos?.filter((p) => p.category === "GENERAL") ?? [];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="w-[calc(100%-2rem)] max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
         <DialogHeader className="shrink-0 p-4 pb-2 border-b flex flex-row items-center justify-between gap-2 bg-card">
           <DialogTitle className="text-base font-semibold">Hasat Detayı</DialogTitle>
           <button
@@ -90,10 +108,18 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
           <div className="p-8 text-center text-muted-foreground">Hasat bulunamadı.</div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-            {/* Kapanmış bilgisi */}
-            <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-foreground">
-              Hasat kapanmıştır. Düzenleme yapılamaz.
-            </div>
+            {/* Kapanmış bilgisi + Revize Et (sadece admin) */}
+            {isLocked && (
+              <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-foreground flex flex-wrap items-center justify-between gap-2">
+                <span>Hasat kapanmıştır. Düzenleme yapılamaz.</span>
+                {showRevizeButton && (
+                  <Button type="button" variant="secondary" size="sm" onClick={handleRevizeClick} className="shrink-0">
+                    <Pencil className="h-4 w-4 mr-1.5" />
+                    Revize Et
+                  </Button>
+                )}
+              </div>
+            )}
 
             {/* Özet - EN ÜSTTE (form ile aynı) */}
             <div className="border rounded-xl p-4 space-y-2 bg-card">
@@ -199,11 +225,10 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
                 {traderSlipPhotos.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {traderSlipPhotos.map((p) => (
-                      <a
+                      <button
                         key={p.id}
-                        href={getPhotoUrl(p.url) ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        type="button"
+                        onClick={() => setPhotoViewerUrl(p.url)}
                         className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50"
                       >
                         <img
@@ -211,7 +236,7 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
                           alt=""
                           className="h-full w-full object-cover"
                         />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -246,11 +271,10 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
                 {generalPhotos.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {generalPhotos.map((p) => (
-                      <a
+                      <button
                         key={p.id}
-                        href={getPhotoUrl(p.url) ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        type="button"
+                        onClick={() => setPhotoViewerUrl(p.url)}
                         className="block h-16 w-16 rounded-lg overflow-hidden border border-border hover:ring-2 ring-primary/50"
                       >
                         <img
@@ -258,7 +282,7 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
                           alt=""
                           className="h-full w-full object-cover"
                         />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -270,5 +294,37 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
         )}
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={!!photoViewerUrl}
+      onOpenChange={(open) => {
+        if (!open) setPhotoViewerUrl(null);
+      }}
+    >
+      <DialogContent className="max-w-[90vw] max-h-[90vh] w-auto h-auto border-none bg-transparent shadow-none p-0 flex items-center justify-center [&>button.absolute]:hidden">
+        <DialogTitle className="sr-only">Hasat fotoğrafı</DialogTitle>
+        <DialogDescription className="sr-only">
+          Hasat fotoğrafını büyük görüntülüyorsunuz.
+        </DialogDescription>
+        {photoViewerUrl && (
+          <div className="relative max-w-[90vw] max-h-[90vh] w-auto h-auto flex items-center justify-center">
+            <button
+              type="button"
+              className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-md hover:bg-white transition-colors"
+              onClick={() => setPhotoViewerUrl(null)}
+              aria-label="Kapat"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={getPhotoUrl(photoViewerUrl) ?? ""}
+              alt="Hasat fotoğrafı"
+              className="max-h-[90vh] max-w-[90vw] w-auto h-auto object-contain rounded-xl"
+            />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

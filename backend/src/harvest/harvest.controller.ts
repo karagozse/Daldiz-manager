@@ -16,6 +16,7 @@ import { UpdateHarvestDto } from './dto/update-harvest.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 import { Tenant } from '../common/decorators/tenant.decorator';
 import { TenantContext } from '../middleware/tenant-context.middleware';
@@ -28,7 +29,7 @@ function isInvalidId(id: string | undefined): boolean {
 
 @Controller('harvest')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.SUPER_ADMIN)
+@Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.ADMIN, Role.SUPER_ADMIN)
 export class HarvestController {
   constructor(private readonly harvestService: HarvestService) {}
 
@@ -117,13 +118,14 @@ export class HarvestController {
     @Param('id') id: string,
     @Body() dto: UpdateHarvestDto,
     @Tenant() tenant: TenantContext,
+    @CurrentUser() user: { role: Role },
   ) {
     if (isInvalidId(id)) {
       console.warn('Harvest PUT /harvest/:id invalid id', { id });
       throw new BadRequestException({ message: 'Harvest id is required and cannot be undefined, null or empty.' });
     }
     console.log('Harvest PUT /harvest/:id', { id });
-    return this.harvestService.update(tenant?.tenantId ?? '', id, dto);
+    return this.harvestService.update(tenant?.tenantId ?? '', id, dto, user?.role);
   }
 
   @Post(':id/submit')
@@ -151,10 +153,11 @@ export class HarvestController {
     @Param('id') id: string,
     @Param('photoId') photoId: string,
     @Tenant() tenant: TenantContext,
+    @CurrentUser() user: { role: Role },
   ) {
     if (isInvalidId(id) || isInvalidId(photoId)) {
       throw new BadRequestException({ message: 'Harvest id and photo id are required.' });
     }
-    return this.harvestService.deletePhoto(tenant?.tenantId ?? '', id, photoId);
+    return this.harvestService.deletePhoto(tenant?.tenantId ?? '', id, photoId, user?.role);
   }
 }

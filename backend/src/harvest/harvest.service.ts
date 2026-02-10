@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TradersService } from '../traders/traders.service';
@@ -305,14 +306,26 @@ export class HarvestService {
     return mapEntry(entry);
   }
 
-  async update(tenantId: string, id: string, dto: UpdateHarvestDto) {
+  async update(
+    tenantId: string,
+    id: string,
+    dto: UpdateHarvestDto,
+    userRole?: string,
+  ) {
     const existing = await this.prisma.harvestEntry.findFirst({
       where: { id, tenantId },
     });
     if (!existing) {
       throw new NotFoundException(`Harvest entry with ID ${id} not found`);
     }
-    if (existing.status !== 'draft') {
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    if (existing.status === 'submitted') {
+      if (!isAdmin) {
+        throw new ForbiddenException(
+          'Only admin can update a closed (submitted) harvest',
+        );
+      }
+    } else if (existing.status !== 'draft') {
       throw new BadRequestException('Only draft harvest entries can be updated');
     }
 
@@ -450,21 +463,44 @@ export class HarvestService {
     return { success: true };
   }
 
-  async deletePhoto(tenantId: string, harvestId: string, photoId: string) {
+  async deletePhoto(
+    tenantId: string,
+    harvestId: string,
+    photoId: string,
+    userRole?: string,
+  ) {
     const harvest = await this.prisma.harvestEntry.findFirst({
       where: { id: harvestId, tenantId },
     });
     if (!harvest) {
       throw new NotFoundException(`Harvest ${harvestId} not found`);
     }
-    if (harvest.status !== 'draft') {
-      throw new BadRequestException('Only draft harvest entries can have photos removed');
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    if (
+      harvest.status !== 'draft' &&
+      !(harvest.status === 'submitted' && isAdmin)
+    ) {
+      throw new BadRequestException(
+        'Only draft harvest entries can have photos removed (or admin revize)',
+      );
     }
     const photo = await this.prisma.harvestPhoto.findFirst({
       where: { id: photoId, harvestId },
     });
     if (!photo) {
       throw new NotFoundException(`Photo ${photoId} not found`);
+    }
+    const url = (photo as any).url as string | undefined;
+    if (url?.startsWith('/uploads/')) {
+      const relativePath = url.replace(/^\/uploads\//, '').replace(/\\/g, '/');
+      const fullPath = join(process.cwd(), 'uploads', relativePath);
+      if (existsSync(fullPath)) {
+        try {
+          unlinkSync(fullPath);
+        } catch (err) {
+          console.warn('Harvest deletePhoto: could not remove file', fullPath, err);
+        }
+      }
     }
     await this.prisma.harvestPhoto.delete({ where: { id: photoId } });
     return { success: true };

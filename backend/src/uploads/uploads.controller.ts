@@ -17,6 +17,7 @@ import { randomUUID } from 'crypto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 import { Tenant } from '../common/decorators/tenant.decorator';
 import { TenantContext } from '../middleware/tenant-context.middleware';
@@ -41,7 +42,7 @@ const imageFileFilter = (_req: any, file: { mimetype: string }, cb: (err: Error 
 
 @Controller('uploads')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.SUPER_ADMIN)
+@Roles(Role.CONSULTANT, Role.LEAD_AUDITOR, Role.ADMIN, Role.SUPER_ADMIN)
 export class UploadsController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -111,6 +112,7 @@ export class UploadsController {
     @Query('category') category: string,
     @UploadedFiles() files: Array<{ filename: string }>,
     @Tenant() tenant: TenantContext,
+    @CurrentUser() user: { role: Role },
   ) {
     if (!category || !['GENERAL', 'TRADER_SLIP'].includes(category)) {
       throw new BadRequestException('Query param category must be GENERAL or TRADER_SLIP');
@@ -121,8 +123,9 @@ export class UploadsController {
     if (!harvest) {
       throw new BadRequestException(`Harvest ${harvestId} not found`);
     }
-    if (harvest.status !== 'draft') {
-      throw new BadRequestException('Only draft harvest entries can receive photo uploads');
+    const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+    if (harvest.status !== 'draft' && !(harvest.status === 'submitted' && isAdmin)) {
+      throw new BadRequestException('Only draft harvest entries can receive photo uploads (or admin revize)');
     }
     if (!files?.length) {
       throw new BadRequestException('No files uploaded');
