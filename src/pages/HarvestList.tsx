@@ -5,9 +5,6 @@ import BottomNav from "@/components/BottomNav";
 import {
   listHarvest,
   fetchHarvestSummary,
-  harvestTotalKg,
-  harvestSecondRatio,
-  isSecondRatioHigh,
   getDefaultHarvestYear,
   type HarvestEntry,
   type HarvestSummaryFilters as HarvestSummaryFiltersType,
@@ -17,13 +14,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Maximize2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatDateDisplay } from "@/lib/date";
+import { formatDateDisplay, formatDateWithTime } from "@/lib/date";
 import { HarvestSummaryFilters } from "@/components/HarvestSummaryFilters";
 import { HarvestSummaryTableCompact } from "@/components/HarvestSummaryTableCompact";
 import { HarvestSummaryModal } from "@/components/HarvestSummaryModal";
 import { HarvestDetailModal } from "@/components/HarvestDetailModal";
 
-const DRAFTS_BOX_MAX_H = "12rem";
+/** Taslaklar listesi: en az 3 kart scroll yapmadan görünsün. */
+const DRAFTS_BOX_MAX_H = "20rem";
 
 function csvCell(val: unknown): string {
   if (val === null || val === undefined) return "";
@@ -330,41 +328,26 @@ const HarvestList = () => {
                   style={{ maxHeight: DRAFTS_BOX_MAX_H }}
                 >
                   {drafts.map((entry) => {
-                    const totalKgE = harvestTotalKg(entry);
-                    const secondRatio = harvestSecondRatio(entry);
-                    const ratioHigh = isSecondRatioHigh(entry);
                     const gardenName = entry.garden?.name ?? `Bahçe #${entry.gardenId}`;
+                    const arabaSuffix = entry.name.split(" - ").pop() ?? "";
+                    const draftTitle = `${gardenName} - ${arabaSuffix}`;
+                    const traderPart = (entry.traderName?.trim() ?? "") ? ` • ${entry.traderName.trim()}` : "";
+                    const subtitle = `${formatDateWithTime(entry.date, entry.createdAt)}${traderPart}`;
                     return (
                       <button
                         key={entry.id}
                         onClick={() => navigate(`/hasat/${entry.id}`)}
-                        className="w-full text-left p-3 rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors"
+                        className="w-full text-left p-2.5 rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-foreground truncate">{entry.name}</span>
+                          <span className="font-semibold text-foreground truncate min-w-0 text-sm">{draftTitle}</span>
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground shrink-0">
                             Taslak
                           </span>
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {formatDateDisplay(entry.date)} · {gardenName}
+                        <div className="text-xs text-muted-foreground mt-0.5 leading-tight truncate">
+                          {subtitle}
                         </div>
-                        {(entry.traderName?.trim() ?? "") && (
-                          <div className="text-xs text-muted-foreground">{entry.traderName}</div>
-                        )}
-                        {(totalKgE != null || secondRatio != null) && (
-                          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mt-1">
-                            {totalKgE != null && <span>Toplam: {totalKgE} kg</span>}
-                            {secondRatio != null && (
-                              <span>
-                                2. oran: %{secondRatio.toFixed(1)}
-                                {ratioHigh && (
-                                  <span className="ml-1 text-warning-foreground">(yüksek)</span>
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </button>
                     );
                   })}

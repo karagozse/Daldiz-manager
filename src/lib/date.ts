@@ -19,6 +19,24 @@ export function formatDateDisplay(value?: string | Date | null): string {
   return `${day}.${month}.${year}`;
 }
 
+/** Format time as HH:mm from a Date (e.g. 14:35). */
+export function formatTime(value?: string | Date | null): string {
+  if (!value) return "";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (isNaN(d.getTime())) return "";
+  const h = d.getHours().toString().padStart(2, "0");
+  const m = d.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+/** Format as "dd.MM.yyyy HH:mm" for draft card title (date from entry.date, time from entry.createdAt). */
+export function formatDateWithTime(date?: string | Date | null, timeSource?: string | Date | null): string {
+  const datePart = formatDateDisplay(date);
+  const timePart = formatTime(timeSource);
+  if (datePart === "-" && !timePart) return "-";
+  return timePart ? `${datePart} ${timePart}` : datePart;
+}
+
 /**
  * Format a date value to dd.MM.yyyy format for Turkish locale (e.g., 20.01.2026)
  * Returns empty string if value is null/undefined, otherwise returns formatted date

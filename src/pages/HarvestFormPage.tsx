@@ -37,6 +37,11 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -337,7 +342,7 @@ const HarvestFormPage = () => {
           traderScaleEmptyKg: num(traderScaleEmptyKg) ?? undefined,
         });
         toast({ title: "Taslak kaydedildi", description: created.name });
-        navigate(`/hasat/${created.id}`, { replace: true });
+        navigate("/hasat", { replace: true });
       } catch (e: any) {
         toast({ title: "Hata", description: e?.message ?? "Taslak kaydedilemedi.", variant: "destructive" });
       } finally {
@@ -365,6 +370,7 @@ const HarvestFormPage = () => {
       });
       setEntry(updated);
       toast({ title: "Taslak güncellendi" });
+      navigate("/hasat", { replace: true });
     } catch (e: any) {
       toast({ title: "Hata", description: e?.message ?? "Güncellenemedi.", variant: "destructive" });
     } finally {
@@ -757,18 +763,16 @@ const HarvestFormPage = () => {
         <div className="card-elevated p-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-foreground">Hasat Bilgileri (zorunlu)</p>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none" aria-label="Bilgi">
-                    <Info size={16} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-[260px]">
-                  Tarih, bahçe, tüccar ve satış fiyatı (TL/kg) alanlarını doldurun. Taslak kaydetmek ve göndermek için bu bölüm zorunludur.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none touch-manipulation" aria-label="Bilgi">
+                  <Info size={16} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="left" align="start" className="max-w-[260px] text-sm p-3">
+                Tarih, bahçe, tüccar ve satış fiyatı (TL/kg) alanlarını doldurun. Taslak kaydetmek ve göndermek için bu bölüm zorunludur.
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -843,18 +847,16 @@ const HarvestFormPage = () => {
         <div className="card-elevated p-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-foreground">Tüccar Fişi (zorunlu)</p>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none" aria-label="Bilgi">
-                    <Info size={16} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-[260px]">
-                  1. ve 2. kalite kg değerlerini girin. Göndermeden önce tüccar fişi fotoğrafı yüklenmiş olmalıdır.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none touch-manipulation" aria-label="Bilgi">
+                  <Info size={16} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="left" align="start" className="max-w-[260px] text-sm p-3">
+                1. ve 2. kalite kg değerlerini girin. Göndermeden önce tüccar fişi fotoğrafı yüklenmiş olmalıdır.
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -968,18 +970,16 @@ const HarvestFormPage = () => {
         <div className="card-elevated p-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-foreground">Kantar ve Diğer Bilgiler (opsiyonel)</p>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none" aria-label="Bilgi">
-                    <Info size={16} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-[260px]">
-                  Bağımsız kantar dolu ve boş değerleri (kg) girin. İsteğe bağlı: kamyon ön/arka, fiş fotoğrafları, bağımsız tartı fişleri.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none touch-manipulation" aria-label="Bilgi">
+                  <Info size={16} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="left" align="start" className="max-w-[260px] text-sm p-3">
+                Bağımsız kantar dolu ve boş değerleri (kg) girin. İsteğe bağlı: kamyon ön/arka, fiş fotoğrafları, bağımsız tartı fişleri.
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

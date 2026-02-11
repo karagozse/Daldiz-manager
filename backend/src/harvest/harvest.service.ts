@@ -9,6 +9,8 @@ import { TradersService } from '../traders/traders.service';
 import { CreateHarvestDto } from './dto/create-harvest.dto';
 import { UpdateHarvestDto } from './dto/update-harvest.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { join } from 'path';
+import { existsSync, unlinkSync } from 'fs';
 
 function toNum(v: Decimal | null | undefined): number | null {
   if (v == null) return null;
@@ -22,49 +24,69 @@ function formatDateForName(d: Date): string {
   return `${day}.${month}.${year}`;
 }
 
+const DRAFT_NAME_SUFFIX = '. Araba';
+
+/**
+ * Extract araba number N from a draft name like "DD.MM.YYYY - N. Araba" or "DD.MM.YYYY HH:mm - N. Araba".
+ * Returns NaN if not in expected format.
+ */
+function parseArabaNumberFromName(name: string): number {
+  if (!name.endsWith(DRAFT_NAME_SUFFIX)) return NaN;
+  const lastDash = name.lastIndexOf(' - ');
+  if (lastDash === -1) return NaN;
+  const numStr = name.slice(lastDash + 3, name.length - DRAFT_NAME_SUFFIX.length);
+  const n = parseInt(numStr, 10);
+  return Number.isNaN(n) || n < 1 ? NaN : n;
+}
+
 /**
  * Compute draft name: "DD.MM.YYYY - N. Araba"
- * N = next available number (1-based) for that date among all entries (draft + submitted).
+ * Araba numarası BAHÇE + GÜN bazlı: aynı bahçede aynı gün 1, 2, 3... ertesi gün tekrar 1'den başlar.
+ * Sorgu: gardenId = ? AND DATE(date) = aynı gün (max N + 1).
  */
 async function computeDraftName(
   prisma: PrismaService,
   tenantId: string,
+  gardenId: number,
   date: Date,
   excludeId?: string,
 ): Promise<string> {
+  const gardenIdNum = Number(gardenId);
+  if (Number.isNaN(gardenIdNum) || gardenIdNum < 1) {
+    throw new BadRequestException('Invalid gardenId for draft name');
+  }
   const dateStart = new Date(date);
   dateStart.setUTCHours(0, 0, 0, 0);
   const dateEnd = new Date(dateStart);
   dateEnd.setUTCDate(dateEnd.getUTCDate() + 1);
 
-  const sameDay = await prisma.harvestEntry.findMany({
-    where: {
-      tenantId,
-      date: {
-        gte: dateStart,
-        lt: dateEnd,
-      },
-      ...(excludeId ? { id: { not: excludeId } } : {}),
-    },
+  const where: {
+    tenantId: string;
+    gardenId: number;
+    date: { gte: Date; lt: Date };
+    id?: { not: string };
+  } = {
+    tenantId,
+    gardenId: gardenIdNum,
+    date: { gte: dateStart, lt: dateEnd },
+  };
+  if (excludeId) {
+    where.id = { not: excludeId };
+  }
+
+  const sameGardenSameDay = await prisma.harvestEntry.findMany({
+    where,
     select: { name: true },
   });
 
+  let maxN = 0;
+  for (const row of sameGardenSameDay) {
+    const n = parseArabaNumberFromName(row.name);
+    if (!Number.isNaN(n) && n > maxN) maxN = n;
+  }
+  const n = maxN + 1;
   const prefix = formatDateForName(date) + ' - ';
-  const suffix = '. Araba';
-  const used: number[] = [];
-  for (const row of sameDay) {
-    const n = row.name.startsWith(prefix) && row.name.endsWith(suffix)
-      ? parseInt(row.name.slice(prefix.length, row.name.length - suffix.length), 10)
-      : NaN;
-    if (!Number.isNaN(n) && n >= 1) used.push(n);
-  }
-  used.sort((a, b) => a - b);
-  let n = 1;
-  for (const u of used) {
-    if (u > n) break;
-    n = u + 1;
-  }
-  return `${prefix}${n}${suffix}`;
+  return `${prefix}${n}${DRAFT_NAME_SUFFIX}`;
 }
 
 function mapEntry(e: any) {
@@ -117,7 +139,11 @@ export class HarvestService {
     if (Number.isNaN(date.getTime())) {
       throw new BadRequestException('Invalid date');
     }
-    const name = await computeDraftName(this.prisma, tenantId, date);
+    const gardenId = Number(dto.gardenId);
+    if (Number.isNaN(gardenId)) {
+      throw new BadRequestException('Invalid gardenId');
+    }
+    const name = await computeDraftName(this.prisma, tenantId, gardenId, date);
 
     const entry = await this.prisma.harvestEntry.create({
       data: {
@@ -330,13 +356,18 @@ export class HarvestService {
     }
 
     const data: any = {};
+    const effectiveGardenIdRaw = dto.gardenId ?? existing.gardenId;
+    const effectiveGardenId = Number(effectiveGardenIdRaw);
+    if (Number.isNaN(effectiveGardenId)) {
+      throw new BadRequestException('Invalid gardenId');
+    }
     if (dto.date != null) {
       const dateObj = new Date(dto.date);
       if (Number.isNaN(dateObj.getTime())) {
         throw new BadRequestException('Invalid date');
       }
       data.date = dateObj;
-      data.name = await computeDraftName(this.prisma, tenantId, dateObj, id);
+      data.name = await computeDraftName(this.prisma, tenantId, effectiveGardenId, dateObj, id);
     }
     if (dto.gardenId != null) {
       const garden = await this.prisma.garden.findFirst({
@@ -345,7 +376,11 @@ export class HarvestService {
       if (!garden) {
         throw new NotFoundException(`Garden with ID ${dto.gardenId} not found`);
       }
-      data.gardenId = dto.gardenId;
+      data.gardenId = Number(dto.gardenId);
+      if (data.name == null) {
+        const dateObj = data.date ?? existing.date;
+        data.name = await computeDraftName(this.prisma, tenantId, Number(dto.gardenId), dateObj, id);
+      }
     }
     if (dto.traderName != null && String(dto.traderName).trim() !== '') {
       const trader = await this.tradersService.findOrCreateByName(tenantId, String(dto.traderName).trim());

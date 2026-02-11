@@ -92,14 +92,22 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
       <DialogContent className="w-[calc(100%-2rem)] max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
         <DialogHeader className="shrink-0 p-4 pb-2 border-b flex flex-row items-center justify-between gap-2 bg-card">
           <DialogTitle className="text-base font-semibold">Hasat Detayı</DialogTitle>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 hover:bg-muted rounded-full"
-            aria-label="Kapat"
-          >
-            <X className="h-5 w-5 text-muted-foreground" />
-          </button>
+          <div className="flex flex-row items-center gap-2">
+            {showRevizeButton && (
+              <Button type="button" variant="secondary" size="sm" onClick={handleRevizeClick} className="shrink-0">
+                <Pencil className="h-4 w-4 mr-1.5" />
+                Revize Et
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 hover:bg-muted rounded-full"
+              aria-label="Kapat"
+            >
+              <X className="h-5 w-5 text-muted-foreground" />
+            </button>
+          </div>
         </DialogHeader>
 
         {loading ? (
@@ -108,19 +116,6 @@ export function HarvestDetailModal({ harvestId, open, onClose }: HarvestDetailMo
           <div className="p-8 text-center text-muted-foreground">Hasat bulunamadı.</div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-            {/* Kapanmış bilgisi + Revize Et (sadece admin) */}
-            {isLocked && (
-              <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-foreground flex flex-wrap items-center justify-between gap-2">
-                <span>Hasat kapanmıştır. Düzenleme yapılamaz.</span>
-                {showRevizeButton && (
-                  <Button type="button" variant="secondary" size="sm" onClick={handleRevizeClick} className="shrink-0">
-                    <Pencil className="h-4 w-4 mr-1.5" />
-                    Revize Et
-                  </Button>
-                )}
-              </div>
-            )}
-
             {/* Özet - EN ÜSTTE (form ile aynı) */}
             <div className="border rounded-xl p-4 space-y-2 bg-card">
               <p className="text-sm font-semibold text-foreground">Özet</p>

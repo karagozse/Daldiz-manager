@@ -27,8 +27,8 @@ function getRowClassName(row: HarvestSummaryRow): string {
   return ROW_STATUS_CLASS[getRowStatus(row)] ?? "";
 }
 
-/** Columns: Tarih | Bahçe | Tüccar | Kg | TL/Kg | Tutar(TL) | icon. Slightly wider numeric columns for breathing room. */
-const GRID_COLUMNS = "82px minmax(0,1fr) minmax(0,1fr) 44px 48px 58px 28px";
+/** Columns: Tarih | Bahçe | Tüccar | Kg | TL/Kg | Tutar(TL) | icon. Tarih/Bahçe dar, Tüccar esnek; sayısal kolonlar aynı. */
+const GRID_COLUMNS = "80px 76px minmax(0,1fr) 44px 48px 58px 28px";
 
 interface HarvestSummaryTableCompactProps {
   rows: HarvestSummaryRow[];
@@ -46,29 +46,29 @@ export function HarvestSummaryTableCompact({ rows, onView }: HarvestSummaryTable
 
   return (
     <div
-      className="w-full min-w-0 text-[11px] border-b border-border"
+      className="w-full min-w-0 text-[13px] leading-tight border-b border-border"
       style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS }}
     >
       {/* Header row: Tarih | Bahçe | Tüccar | Kg | TL/Kg | Tutar(TL) | icon */}
-      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
+      <div className="sticky top-0 z-[2] flex items-center pl-2.5 pr-1.5 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
         Tarih
       </div>
-      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
+      <div className="sticky top-0 z-[2] flex items-center pl-1.5 pr-2.5 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
         Bahçe
       </div>
-      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
+      <div className="sticky top-0 z-[2] flex items-center px-2.5 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border text-left whitespace-nowrap min-w-0">
         Tüccar
       </div>
-      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-right whitespace-nowrap">
+      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border text-right whitespace-nowrap">
         Kg
       </div>
-      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-right whitespace-nowrap">
+      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border text-right whitespace-nowrap">
         TL/Kg
       </div>
-      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border text-right whitespace-nowrap">
+      <div className="sticky top-0 z-[2] flex items-center justify-end px-2.5 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border text-right whitespace-nowrap">
         Tutar(TL)
       </div>
-      <div className="sticky top-0 z-[2] flex items-center justify-center px-2 py-1.5 h-9 font-medium text-foreground bg-background border-b border-border" aria-label="İnceleme">
+      <div className="sticky top-0 z-[2] flex items-center justify-center px-2 py-1.5 h-9 font-medium text-[14px] text-foreground bg-background border-b border-border" aria-label="İnceleme">
         <span className="sr-only">İnceleme</span>
       </div>
 
@@ -82,10 +82,10 @@ export function HarvestSummaryTableCompact({ rows, onView }: HarvestSummaryTable
           )}
           style={{ gridTemplateColumns: GRID_COLUMNS }}
         >
-          <div className="flex items-center px-2.5 py-1 text-muted-foreground text-left whitespace-nowrap min-w-0 bg-transparent overflow-hidden text-ellipsis" title={formatDateDisplay(r.harvest_date)}>
+          <div className="flex items-center pl-2.5 pr-1.5 py-1 text-muted-foreground text-left whitespace-nowrap min-w-0 bg-transparent overflow-hidden text-ellipsis" title={formatDateDisplay(r.harvest_date)}>
             {formatDateDisplay(r.harvest_date)}
           </div>
-          <div className="flex items-center px-2.5 py-1 text-foreground text-left overflow-hidden text-ellipsis whitespace-nowrap min-w-0 bg-transparent" title={r.garden_name || undefined}>
+          <div className="flex items-center pl-1.5 pr-2.5 py-1 text-foreground text-left overflow-hidden text-ellipsis whitespace-nowrap min-w-0 bg-transparent" title={r.garden_name || undefined}>
             {r.garden_name || "—"}
           </div>
           <div className="flex items-center px-2.5 py-1 text-foreground text-left overflow-hidden text-ellipsis whitespace-nowrap min-w-0 bg-transparent" title={r.trader_name || undefined}>
