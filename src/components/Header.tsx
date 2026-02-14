@@ -1,8 +1,9 @@
-import { Bell, User, ClipboardList } from "lucide-react";
+import { User, ClipboardList } from "lucide-react";
 import { useState } from "react";
 import GlobalWarningsModal from "./GlobalWarningsModal";
 import ProfileMenuSheet from "./ProfileMenuSheet";
 import ReviewTasksModal from "./ReviewTasksModal";
+import NotificationBell from "./NotificationBell";
 import { useApp } from "@/contexts/AppContext";
 import { mapBackendRoleToSemantic, can } from "@/lib/permissions";
 
@@ -17,7 +18,8 @@ const Header = ({ title, showNotification = true, showProfile = false }: HeaderP
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [reviewTasksOpen, setReviewTasksOpen] = useState(false);
 
-  const { activeRole } = useApp();
+  const { activeRole, gardens } = useApp();
+  const totalOpenCriticalCount = gardens.reduce((s, g) => s + (g.openCriticalWarningCount ?? 0), 0);
   const role = mapBackendRoleToSemantic(activeRole ?? "");
   const showTaskCenter = can.seeTaskCenter(role);
 
@@ -25,15 +27,16 @@ const Header = ({ title, showNotification = true, showProfile = false }: HeaderP
     <>
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
-          <div className="w-10 flex justify-start">
+          <div className="w-12 flex justify-start">
             {showProfile && (
-              <button 
-                className="p-1.5 hover:bg-muted rounded-full transition-colors"
+              <button
+                type="button"
+                className="min-w-10 min-h-10 w-10 h-10 flex items-center justify-center hover:bg-muted rounded-full transition-colors"
                 onClick={() => setProfileMenuOpen(true)}
                 aria-label="Profil menüsü"
                 title="Profil menüsü"
               >
-                <User size={20} className="text-muted-foreground" />
+                <User size={24} className="text-muted-foreground" />
               </button>
             )}
           </div>
@@ -42,23 +45,20 @@ const Header = ({ title, showNotification = true, showProfile = false }: HeaderP
             {showTaskCenter && (
               <button
                 type="button"
-                className="p-1.5 hover:bg-muted rounded-full transition-colors"
+                className="min-w-10 min-h-10 w-10 h-10 flex items-center justify-center hover:bg-muted rounded-full transition-colors"
                 onClick={() => setReviewTasksOpen(true)}
                 aria-label="Görev Merkezi"
                 title="Görev Merkezi"
               >
-                <ClipboardList size={20} className="text-muted-foreground" />
+                <ClipboardList size={24} className="text-muted-foreground" />
               </button>
             )}
             {showNotification && (
-              <button 
-                className="p-1.5 hover:bg-muted rounded-full transition-colors relative"
+              <NotificationBell
+                count={totalOpenCriticalCount}
                 onClick={() => setWarningsModalOpen(true)}
-                aria-label="Bildirimler"
-                title="Bildirimler"
-              >
-                <Bell size={20} className="text-muted-foreground" />
-              </button>
+                size={24}
+              />
             )}
           </div>
         </div>

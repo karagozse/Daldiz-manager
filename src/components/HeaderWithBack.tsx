@@ -1,5 +1,9 @@
-import { ArrowLeft, Bell } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import NotificationBell from "./NotificationBell";
+import GlobalWarningsModal from "./GlobalWarningsModal";
+import { useApp } from "@/contexts/AppContext";
 
 interface HeaderWithBackProps {
   title: string;
@@ -15,6 +19,9 @@ const HeaderWithBack = ({
   onBack 
 }: HeaderWithBackProps) => {
   const navigate = useNavigate();
+  const [warningsModalOpen, setWarningsModalOpen] = useState(false);
+  const { gardens } = useApp();
+  const totalOpenCriticalCount = gardens.reduce((s, g) => s + (g.openCriticalWarningCount ?? 0), 0);
   
   const handleBack = () => {
     if (onBack) {
@@ -25,6 +32,7 @@ const HeaderWithBack = ({
   };
 
   return (
+    <>
     <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/50">
       <div className="flex items-center px-4 py-3 max-w-lg mx-auto">
         <button 
@@ -45,19 +53,25 @@ const HeaderWithBack = ({
           </div>
         </div>
         
-        <div className="w-10 flex justify-end">
+        <div className="w-12 flex justify-end">
           {showNotification && (
-            <button 
-              className="p-2 hover:bg-muted rounded-full transition-colors"
-              aria-label="Bildirimler"
-              title="Bildirimler"
-            >
-              <Bell size={22} className="text-warning" />
-            </button>
+            <NotificationBell
+              count={totalOpenCriticalCount}
+              onClick={() => setWarningsModalOpen(true)}
+              size={24}
+              className="text-muted-foreground"
+            />
           )}
         </div>
       </div>
     </header>
+    {showNotification && (
+      <GlobalWarningsModal
+        isOpen={warningsModalOpen}
+        onClose={() => setWarningsModalOpen(false)}
+      />
+    )}
+    </>
   );
 };
 

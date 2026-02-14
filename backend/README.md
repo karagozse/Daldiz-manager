@@ -119,3 +119,19 @@ After seeding, you can login with:
 - `npx prisma studio` - Open Prisma Studio (database GUI)
 - `npx prisma migrate dev` - Create and apply migrations
 - `npx prisma generate` - Generate Prisma Client
+
+### DB connection (single source)
+
+- **Tek kaynak:** `backend/.env` içindeki `DATABASE_URL`
+- Backend boot sırasında `[boot] DATABASE_URL target: <host>/<db> (Neon)` şeklinde loglanır (şifre gösterilmez)
+- `ConfigModule` ve Prisma hep `backend/.env` kullanır (cwd’den bağımsız)
+- Production (Render vb.): Ortam değişkenlerinde `DATABASE_URL` tanımlayın
+
+### Debug endpoint (sadece development)
+
+```
+GET /debug/db
+```
+
+- `NODE_ENV=production` iken 404 döner
+- Bağlanılan DB bilgisi: `current_database`, `inet_server_addr`, `version`, `daily_field_checks` tablosu, `schema_migrations`, kayıt sayısı

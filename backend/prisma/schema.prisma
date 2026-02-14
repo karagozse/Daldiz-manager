@@ -34,6 +34,7 @@ model User {
   closedCriticalWarnings                          CriticalWarning[]           @relation("ClosedBy")
   createdCriticalWarnings                         CriticalWarning[]           @relation("CreatedBy")
   inspections                                     Inspection[]
+  dailyFieldChecks                                DailyFieldCheck[]
   prescriptions_prescriptions_createdByIdTousers  Prescription[]              @relation("prescriptions_createdByIdTousers")
   prescriptions_prescriptions_reviewedByIdTousers Prescription[]              @relation("prescriptions_reviewedByIdTousers")
   user_notification_settings                      user_notification_settings?
@@ -72,6 +73,7 @@ model Garden {
   criticalWarnings CriticalWarning[]
   campus           Campus            @relation("CampusGardens", fields: [campusTenantId, campusId], references: [tenantId, id])
   inspections      Inspection[]
+  dailyFieldChecks DailyFieldCheck[]
   harvestEntries   HarvestEntry[]
 
   @@index([tenantId])
@@ -261,6 +263,33 @@ enum GardenStatus {
 }
 
 enum InspectionStatus {
+  DRAFT
+  SUBMITTED
+}
+
+model DailyFieldCheck {
+  id               String                 @id @default(uuid())
+  tenantId         String
+  gardenId         Int
+  createdById      Int
+  date             DateTime               @db.Date
+  status           DailyFieldCheckStatus  @default(DRAFT)
+  answers          Json                   @default("{}")
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  submittedAt      DateTime?
+  createdBy        User                   @relation(fields: [createdById], references: [id])
+  garden           Garden                 @relation(fields: [gardenId], references: [id], onDelete: Cascade)
+
+  @@unique([gardenId, date])
+  @@index([tenantId])
+  @@index([gardenId])
+  @@index([createdById])
+  @@index([status])
+  @@map("daily_field_checks")
+}
+
+enum DailyFieldCheckStatus {
   DRAFT
   SUBMITTED
 }

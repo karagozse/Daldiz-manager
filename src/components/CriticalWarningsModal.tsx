@@ -17,7 +17,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle } from "lucide-react";
+import { Bell } from "lucide-react";
 import { CriticalWarning, useApp } from "@/contexts/AppContext";
 import {
   Dialog,
@@ -90,7 +90,7 @@ const CriticalWarningsModal = ({
       <DialogContent className="flex flex-col p-0 gap-0">
         <DialogHeader className="p-4 pb-3 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle size={20} className="text-destructive" />
+            <Bell size={20} className="text-destructive" />
             <span className="break-words">{title}</span>
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -105,7 +105,7 @@ const CriticalWarningsModal = ({
             </div>
           ) : warnings.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <AlertTriangle size={32} className="mx-auto mb-2 opacity-50" />
+              <Bell size={32} className="mx-auto mb-2 opacity-50 text-destructive" />
               <p>Açık kritik uyarı bulunmuyor</p>
             </div>
           ) : (

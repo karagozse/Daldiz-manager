@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, X } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { useApp, CriticalWarning, INSPECTION_TOPICS } from "@/contexts/AppContext";
 import {
   Dialog,
@@ -92,7 +92,7 @@ const GlobalWarningsModal = ({
         <DialogHeader className="sticky top-0 bg-background z-10 p-4 pb-3 border-b shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle size={20} className="text-destructive" />
+              <Bell size={20} className="text-destructive" />
               <span>Kritik Uyarılar</span>
             </DialogTitle>
             <button
@@ -159,7 +159,7 @@ const GlobalWarningsModal = ({
             </div>
           ) : warnings.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <AlertTriangle size={32} className="mx-auto mb-2 opacity-50" />
+              <Bell size={32} className="mx-auto mb-2 opacity-50 text-destructive" />
               <p>Kritik uyarı bulunmuyor</p>
             </div>
           ) : (

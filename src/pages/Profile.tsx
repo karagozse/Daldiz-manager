@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
-import { User, Settings, Bell, HelpCircle, LogOut, FlaskConical, UserCheck, ClipboardCheck, Database, AlertTriangle, KeyRound, Shield, FileCheck, Leaf } from "lucide-react";
+import { User, Settings, Bell, HelpCircle, LogOut, FlaskConical, UserCheck, ClipboardCheck, Database, KeyRound, Shield, FileCheck, Leaf } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import GardenManagementModal from "@/components/GardenManagementModal";
@@ -270,7 +270,7 @@ const Profile = () => {
                 onClick={handleCreateWarnings}
                 className="w-full py-3 px-4 text-left rounded-xl border border-border hover:bg-muted/50 transition-colors flex items-center gap-3"
               >
-                <AlertTriangle size={18} className="text-destructive flex-shrink-0" />
+                <Bell size={18} className="text-destructive flex-shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Kritik Uyarı Test Verisi</p>
                   <p className="text-xs text-muted-foreground">Açık ve kapalı uyarı örnekleri</p>

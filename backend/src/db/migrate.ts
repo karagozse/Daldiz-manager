@@ -4,11 +4,17 @@
  * applies any not yet in schema_migrations.
  */
 
-import { readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { PrismaClient } from '@prisma/client';
 
-const MIGRATIONS_DIR = join(process.cwd(), 'db', 'migrations');
+// Resolve migrations dir: use path relative to this file (works when run from any cwd)
+// Compiled output: dist/db/migrate.js -> migrations at backend/db/migrations
+const MIGRATIONS_DIR = (() => {
+  const dirBased = join(__dirname, '..', '..', 'db', 'migrations');
+  if (existsSync(dirBased)) return dirBased;
+  return join(process.cwd(), 'db', 'migrations');
+})();
 
 function getMigrationFiles(): string[] {
   try {
@@ -41,7 +47,9 @@ function splitStatements(sql: string): string[] {
       current += sql[++i];
     } else if (c === ';' && !inDollarQuote) {
       const stmt = current.trim();
-      if (stmt && !stmt.startsWith('--')) statements.push(stmt);
+      // Skip only if empty or entirely comment lines (keep statements that start with -- but have SQL)
+      const withoutLeadingComments = stmt.replace(/^(\s*--[^\n]*\n)+/, '').trim();
+      if (withoutLeadingComments) statements.push(stmt);
       current = '';
     }
   }
@@ -73,7 +81,8 @@ export async function runMigrations(prisma: PrismaClient): Promise<void> {
     const sql = loadSql(name);
     const statements = splitStatements(sql);
 
-    for (const statement of statements) {
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i];
       if (!statement.trim()) continue;
       try {
         await prisma.$executeRawUnsafe(statement);
@@ -81,6 +90,8 @@ export async function runMigrations(prisma: PrismaClient): Promise<void> {
         if (e.message?.includes('already exists') || e.code === '42P07' || e.code === '42710') {
           continue;
         }
+        console.error(`[migrate] ${name} statement ${i + 1} failed:`, e.message);
+        console.error('[migrate] Statement:', statement.slice(0, 200) + (statement.length > 200 ? '...' : ''));
         throw e;
       }
     }

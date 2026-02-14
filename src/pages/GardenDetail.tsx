@@ -1,22 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useApp, INSPECTION_TOPICS, CriticalWarning, BackendInspection } from "@/contexts/AppContext";
+import { useApp } from "@/contexts/AppContext";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import BottomNav from "@/components/BottomNav";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import ScoreCircle from "@/components/ScoreCircle";
 import ScoreChart from "@/components/ScoreChart";
-import TopicCard from "@/components/TopicCard";
-import PreviousInspectionCard from "@/components/PreviousInspectionCard";
-import CriticalWarningsModal from "@/components/CriticalWarningsModal";
 import PreviousInspectionModal from "@/components/PreviousInspectionModal";
-import { getPhotoUrl } from "@/lib/photoUtils";
-import { Play, X } from "lucide-react";
-import { fetchCriticalWarningsForGarden } from "@/lib/criticalWarnings";
+import CriticalBadge from "@/components/CriticalBadge";
+import CriticalWarningsModal from "@/components/CriticalWarningsModal";
+import { getDailyFieldCheckStatus } from "@/lib/dailyFieldCheckStorage";
+import { Play, ClipboardCheck } from "lucide-react";
 import { formatDateDisplay } from "@/lib/date";
 import { computeForecastYieldTonPerDaForGarden } from "@/lib/forecastYield";
 import { mapBackendRoleToSemantic, can } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const GardenDetail = () => {
   const { id } = useParams();
@@ -24,24 +23,17 @@ const GardenDetail = () => {
   const { 
     gardens, 
     activeRole, 
-    getDraftForGarden,
     inspections,
     loadInspectionsForGarden
   } = useApp();
   
+  // Denetim Raporu modal (same as Analysis - PreviousInspectionModal)
+  const [inspectionReportModalOpen, setInspectionReportModalOpen] = useState(false);
+  // Guard: open modal after fetch when user clicks before data loaded
+  const [wantToOpenReportModal, setWantToOpenReportModal] = useState(false);
+  const [justFetchedReport, setJustFetchedReport] = useState(false);
   const [warningsModalOpen, setWarningsModalOpen] = useState(false);
-  const [warningsModalTitle, setWarningsModalTitle] = useState("");
-  const [selectedTopicId, setSelectedTopicId] = useState<number | undefined>(undefined);
-  
-  // Previous inspection modal state
-  const [showPreviousInspectionModal, setShowPreviousInspectionModal] = useState(false);
-  const [previousInspectionForModal, setPreviousInspectionForModal] = useState<BackendInspection | null>(null);
-  
-  // Open warnings state for topic-level counts
-  const [openWarnings, setOpenWarnings] = useState<CriticalWarning[]>([]);
-  
-  // Photo viewer state
-  const [photoViewerUrl, setPhotoViewerUrl] = useState<string | null>(null);
+  const { toast } = useToast();
   
   const gardenId = parseInt(id || "1");
   const garden = gardens.find(g => g.id === gardenId);
@@ -54,20 +46,22 @@ const GardenDetail = () => {
     }
   }, [gardenId, loadInspectionsForGarden]);
 
-  // Load open critical warnings for topic-level counts
+  // After fetching inspections for "Denetim Raporu", open modal or show toast
   useEffect(() => {
-    const loadWarnings = async () => {
-      if (!garden) return;
-      try {
-        const warnings = await fetchCriticalWarningsForGarden(garden.id, 'OPEN');
-        setOpenWarnings(warnings);
-      } catch (error) {
-        console.error('Failed to load garden open warnings', error);
-      }
-    };
-
-    loadWarnings();
-  }, [garden?.id]);
+    if (!wantToOpenReportModal || !justFetchedReport || !gardenId) return;
+    const gardenInspections = inspections.filter(i => i.gardenId === gardenId);
+    const backendScored = gardenInspections
+      .filter(i => i.status === "SUBMITTED" && typeof i.score === "number")
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const latest = backendScored[0] ?? null;
+    if (latest) {
+      setInspectionReportModalOpen(true);
+    } else {
+      toast({ title: "Henüz denetim raporu bulunamadı.", variant: "destructive" });
+    }
+    setWantToOpenReportModal(false);
+    setJustFetchedReport(false);
+  }, [wantToOpenReportModal, justFetchedReport, gardenId, inspections, toast]);
   
   // Custom back handler - navigate to gardens list
   const handleBack = () => {
@@ -157,30 +151,18 @@ const GardenDetail = () => {
     }
   };
 
-  const handleViewPreviousInspection = () => {
-    // Latest SUBMITTED inspection'ı göster in modal
+  const handleEvaluate = () => {
+    navigate(`/bahce/${gardenId}/denetim`);
+  };
+
+  const handleDenetimRaporuClick = async () => {
     if (latestScored) {
-      setPreviousInspectionForModal(latestScored);
-      setShowPreviousInspectionModal(true);
+      setInspectionReportModalOpen(true);
+      return;
     }
-  };
-
-  // Get warning count for a specific topic from loaded openWarnings
-  const getTopicWarningCount = (topicId: number): number => {
-    if (!openWarnings || openWarnings.length === 0) return 0;
-    return openWarnings.filter(
-      (w) => w.topicId === topicId && w.status === 'OPEN'
-    ).length;
-  };
-  
-  // Garden-level critical warning count
-  const gardenCriticalCount = garden?.openCriticalWarningCount ?? 0;
-
-  // Handle clicking on a topic's critical alert badge
-  const handleTopicWarningClick = (topicId: number, topicName: string) => {
-    setSelectedTopicId(topicId);
-    setWarningsModalTitle(topicName);
-    setWarningsModalOpen(true);
+    setWantToOpenReportModal(true);
+    await loadInspectionsForGarden(gardenId);
+    setJustFetchedReport(true);
   };
 
   return (
@@ -197,11 +179,21 @@ const GardenDetail = () => {
           <div className="flex items-start justify-between mb-3">
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-1">
-                Bahçe Skoru
+                Denetim
               </h3>
               <p className="text-sm text-muted-foreground">
-                {evaluationDateText ? `Son Değerlendirme: ${evaluationDateText}` : "Henüz değerlendirme yapılmadı"}
+                {evaluationDateText ? `Son Denetim: ${evaluationDateText}` : "Henüz değerlendirme yapılmadı"}
               </p>
+              {/* Aynı tasarım: Bahçeler sayfasındaki "X Kritik" göstergesi - sadece count > 0 iken */}
+              {(garden.openCriticalWarningCount ?? 0) > 0 && (
+                <div className="h-[20px] flex items-center mt-3">
+                  <CriticalBadge
+                    count={garden.openCriticalWarningCount ?? 0}
+                    onClick={() => setWarningsModalOpen(true)}
+                    size="sm"
+                  />
+                </div>
+              )}
             </div>
             <ScoreCircle score={latestScore ?? 0} size="md" />
           </div>
@@ -223,7 +215,52 @@ const GardenDetail = () => {
               Henüz değerlendirme yapılmadı
             </div>
           )}
+          {/* Denetim Başlat + Denetim Raporu - alt alta, Reçete Yaz / Güncel Reçete ile aynı stil */}
+          <div className="flex flex-col gap-2 mt-4">
+            {can.seeStartAuditBtn(role) && !backendDraft && !backendPending && (
+              <button
+                type="button"
+                onClick={handleStartInspection}
+                className="w-full card-elevated p-4 flex items-center justify-center gap-2 text-primary font-medium hover:bg-primary/5 transition-colors"
+                aria-label="Denetim başlat"
+              >
+                <Play size={20} />
+                <span>Denetim Başlat</span>
+              </button>
+            )}
+            <Button
+              type="button"
+              onClick={handleDenetimRaporuClick}
+              className="w-full bg-green-600 hover:bg-green-700 text-white border-green-600"
+            >
+              Denetim Raporu
+            </Button>
+          </div>
         </div>
+
+        {/* Günlük Saha Kontrolü - Denetim kartının altında */}
+        {(() => {
+          const fieldCheckStatus = getDailyFieldCheckStatus(gardenId);
+          if (fieldCheckStatus === "SUBMITTED") {
+            return (
+              <div className="w-full card-elevated p-4 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                <ClipboardCheck size={20} />
+                <span>Bugün gönderildi</span>
+              </div>
+            );
+          }
+          return (
+            <button
+              type="button"
+              onClick={() => navigate(`/bahce/${gardenId}/saha-kontrol`)}
+              className="w-full card-elevated p-4 flex items-center justify-center gap-2 text-primary font-medium hover:bg-primary/5 transition-colors"
+              aria-label={fieldCheckStatus === "DRAFT" ? "Günlük saha kontrolüne devam et" : "Günlük saha kontrolü başlat"}
+            >
+              <ClipboardCheck size={20} />
+              <span>{fieldCheckStatus === "DRAFT" ? "Günlük Saha Kontrolü Devam Et" : "Günlük Saha Kontrolü Başlat"}</span>
+            </button>
+          );
+        })()}
 
         {/* Draft notice: root, danisman only */}
         {can.seeStartAuditBtn(role) && backendDraft && (
@@ -292,150 +329,27 @@ const GardenDetail = () => {
           </div>
         )}
 
-        {/* Denetim Başlat: root, danisman only; hide when draft or pending exists */}
-        {can.seeStartAuditBtn(role) && !backendDraft && !backendPending && (
-          <button 
-            onClick={handleStartInspection}
-            className="w-full card-elevated p-4 flex items-center justify-center gap-2 text-primary font-medium hover:bg-primary/5 transition-colors"
-            aria-label="Yeni denetim başlat"
-          >
-            <Play size={20} />
-            <span>Denetim Başlat</span>
-          </button>
-        )}
-
-        {/* Inspection Topics */}
-        <div>
-          <h3 className="text-base font-semibold text-foreground mb-3">Denetim Konuları</h3>
-          <div className="space-y-3">
-            {INSPECTION_TOPICS.map((topic) => {
-              // Latest SUBMITTED inspection topics
-              let latestData = null;
-              
-              // 1. Latest SUBMITTED inspection'dan topics verilerini al
-              if (latestScored && latestScored.topics) {
-                const backendTopic = latestScored.topics.find((t: any) => t.topicId === topic.id);
-                if (backendTopic) {
-                  latestData = {
-                    status: backendTopic.status,
-                    note: backendTopic.note || undefined,
-                    photoUrl: backendTopic.photoUrl || undefined,
-                    score: backendTopic.score || undefined,
-                  };
-                }
-              }
-              
-              
-              // Get topic-level warning count from loaded openWarnings
-              const topicWarningCount = getTopicWarningCount(topic.id);
-              
-              return (
-                <TopicCard
-                  key={topic.id}
-                  name={topic.name}
-                  status={latestData?.status || "not_started"}
-                  note={latestData?.note}
-                  photoUrl={latestData?.photoUrl}
-                  score={latestData?.score}
-                  showScore={latestData?.score !== undefined}
-                  warningCount={topicWarningCount}
-                  onWarningClick={() => handleTopicWarningClick(topic.id, topic.name)}
-                  onPhotoClick={latestData?.photoUrl ? () => setPhotoViewerUrl(latestData.photoUrl || null) : undefined}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Previous Inspection - Sadece 2+ SUBMITTED inspection varsa göster */}
-        {previousScored && (() => {
-          // Calculate open critical warnings for this previous inspection
-          // Filter warnings that belong to this inspection's garden and are still open
-          const previousInspectionWarningCount = openWarnings.filter(
-            w => w.gardenId === gardenId && w.status === "OPEN"
-          ).length;
-          
-          return (
-            <div>
-              <h3 className="text-base font-semibold text-foreground mb-3">Önceki Denetim</h3>
-              <PreviousInspectionCard
-                date={new Date(previousScored.createdAt).toLocaleDateString('tr-TR', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                })}
-                score={previousScored.score ?? 0}
-                criticalWarningCount={previousInspectionWarningCount}
-                onClick={() => {
-                  if (previousScored) {
-                    setPreviousInspectionForModal(previousScored);
-                    setShowPreviousInspectionModal(true);
-                  }
-                }}
-              />
-            </div>
-          );
-        })()}
       </main>
       
-      {/* Critical Warnings Modal - fetches from API */}
-      <CriticalWarningsModal
-        isOpen={warningsModalOpen}
-        onClose={() => {
-          setWarningsModalOpen(false);
-          setSelectedTopicId(undefined);
-        }}
-        title={warningsModalTitle}
-        gardenId={gardenId}
-        status="OPEN"
-        topicId={selectedTopicId}
-      />
-      
-      {/* Previous Inspection Modal */}
+      {/* Denetim Raporu: same modal as Analysis (PreviousInspectionModal) */}
       <PreviousInspectionModal
-        open={showPreviousInspectionModal}
-        onOpenChange={setShowPreviousInspectionModal}
-        inspection={previousInspectionForModal}
+        open={inspectionReportModalOpen}
+        onOpenChange={setInspectionReportModalOpen}
+        inspection={latestScored}
         garden={garden}
         title="Denetim Raporu"
         showCriticalWarnings={false}
       />
       
-      {/* Photo viewer modal */}
-      {photoViewerUrl && (
-        <Dialog
-          open={!!photoViewerUrl}
-          onOpenChange={(open) => {
-            if (!open) {
-              setPhotoViewerUrl(null);
-            }
-          }}
-        >
-          <DialogContent className="max-w-[90vw] max-h-[90vh] w-auto h-auto border-none bg-transparent shadow-none p-0 flex items-center justify-center">
-            <DialogTitle className="sr-only">Denetim fotoğrafı</DialogTitle>
-            <DialogDescription className="sr-only">
-              Denetim fotoğrafını büyük olarak görüntülüyorsunuz.
-            </DialogDescription>
-            <div className="relative max-w-[90vw] max-h-[90vh] w-auto h-auto flex items-center justify-center">
-              {/* Close button */}
-              <button
-                type="button"
-                className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-md hover:bg-white transition-colors"
-                onClick={() => setPhotoViewerUrl(null)}
-                aria-label="Kapat"
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <img
-                src={getPhotoUrl(photoViewerUrl) ?? ""}
-                alt="Denetim fotoğrafı"
-                className="max-h-[90vh] max-w-[90vw] w-auto h-auto object-contain rounded-xl"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-      
+      {/* Açık kritik uyarılar listesi - Bahçeler sayfasındaki ile aynı modal */}
+      <CriticalWarningsModal
+        isOpen={warningsModalOpen}
+        onClose={() => setWarningsModalOpen(false)}
+        title="Kritik Uyarılar"
+        gardenId={gardenId}
+        status="OPEN"
+      />
+
       <BottomNav />
     </div>
   );

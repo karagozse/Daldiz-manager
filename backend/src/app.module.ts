@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { join } from 'path';
 import { TenantContextMiddleware } from './middleware/tenant-context.middleware';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HarvestModule } from './harvest/harvest.module';
 import { TradersModule } from './traders/traders.module';
+import { DailyFieldCheckModule } from './daily-field-check/daily-field-check.module';
 
 @Module({
   controllers: [AppController],
@@ -21,7 +23,7 @@ import { TradersModule } from './traders/traders.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: join(__dirname, '..', '.env'),
     }),
     PrismaModule,
     AuthModule,
@@ -35,6 +37,7 @@ import { TradersModule } from './traders/traders.module';
     NotificationsModule,
     HarvestModule,
     TradersModule,
+    DailyFieldCheckModule,
   ],
 })
 export class AppModule implements NestModule {

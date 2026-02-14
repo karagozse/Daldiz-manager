@@ -7,12 +7,12 @@
  * ╚════════════════════════════════════════════════════════════════════════════╝
  * 
  * RULES:
- * - If count > 0: RED badge with "X Kritik", CLICKABLE
+ * - If count > 0: RED badge with Bell icon + "X Kritik", CLICKABLE
  * - If count == 0: GREEN badge with "Kritik Yok", NOT CLICKABLE
- * - Same styling everywhere
+ * - Same styling everywhere (kritik = zil ikonu, üçgen kullanılmaz)
  */
 
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { Bell, CheckCircle } from "lucide-react";
 
 interface CriticalBadgeProps {
   count: number;
@@ -38,7 +38,7 @@ const CriticalBadge = ({ count, onClick, size = "md" }: CriticalBadgeProps) => {
         }}
         className={`inline-flex items-center rounded-full font-medium transition-colors bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer ${sizeClasses}`}
       >
-        <AlertTriangle size={iconSize} />
+        <Bell size={iconSize} className="text-destructive" />
         <span>{count} Kritik</span>
       </button>
     );

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { useApp, BackendInspection } from "@/contexts/AppContext";
-import { ChevronRight, ChevronDown, TrendingUp, FileText, BarChart3, CalendarDays } from "lucide-react";
+import { ChevronRight, ChevronDown, TrendingUp, FileText, BarChart3, CalendarDays, ClipboardCheck } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine, ReferenceArea } from "recharts";
 import { fetchHarvestSummary, getDefaultHarvestYear, type HarvestSummaryRow } from "@/lib/harvest";
 import { GARDEN_AREAS } from "@/constants/area";
@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import PreviousInspectionModal from "@/components/PreviousInspectionModal";
+import { DailyFieldCheckReportModal } from "@/components/DailyFieldCheckReportModal";
+import { listDailyFieldChecks, type BackendDailyFieldCheck } from "@/lib/dailyFieldCheckApi";
 import { HarvestAnalysisSection } from "@/components/analytics/HarvestAnalysisSection";
 import {
   ANALYSIS_CHART_MARGIN,
@@ -49,6 +51,13 @@ const Analysis = () => {
   // State for inspection reports section
   const [selectedGardenFilter, setSelectedGardenFilter] = useState<string>("all");
   const [selectedInspection, setSelectedInspection] = useState<BackendInspection | null>(null);
+
+  // State for field check (saha kontrol) reports section
+  const [fieldCheckGardenFilter, setFieldCheckGardenFilter] = useState<string>("all");
+  const [fieldCheckReports, setFieldCheckReports] = useState<BackendDailyFieldCheck[]>([]);
+  const [fieldCheckReportsLoading, setFieldCheckReportsLoading] = useState(false);
+  const [selectedFieldCheckReport, setSelectedFieldCheckReport] = useState<BackendDailyFieldCheck | null>(null);
+  const [isFieldCheckReportsOpen, setIsFieldCheckReportsOpen] = useState(false);
 
   // Collapsible sections (default closed)
   const [isPerfOpen, setIsPerfOpen] = useState(false);
@@ -359,6 +368,23 @@ const Analysis = () => {
     return sorted.slice(0, 5);
   }, [inspections, selectedGardenFilter]);
 
+  useEffect(() => {
+    if (!isFieldCheckReportsOpen) return;
+    let cancelled = false;
+    setFieldCheckReportsLoading(true);
+    const gardenId = fieldCheckGardenFilter === "all" ? undefined : parseInt(fieldCheckGardenFilter, 10);
+    listDailyFieldChecks(gardenId, 50)
+      .then((list) => {
+        if (!cancelled) setFieldCheckReports(list);
+      })
+      .catch(() => {
+        if (!cancelled) setFieldCheckReports([]);
+      })
+      .finally(() => {
+        if (!cancelled) setFieldCheckReportsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [isFieldCheckReportsOpen, fieldCheckGardenFilter]);
 
   // Loading durumunda skeleton göster
   if (isInitialDataLoading) {
@@ -699,6 +725,96 @@ const Analysis = () => {
           )}
         </section>
 
+        {/* Section: Saha Kontrol Raporları (same format as Denetim Raporları) */}
+        <section className="card-elevated overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setIsFieldCheckReportsOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors text-left min-h-[44px]"
+            aria-expanded={isFieldCheckReportsOpen}
+          >
+            <div className="flex items-center gap-2">
+              <ClipboardCheck size={18} className="text-primary flex-shrink-0" />
+              <span className="text-base font-semibold text-foreground">Saha Kontrol Raporları</span>
+            </div>
+            <ChevronDown
+              size={20}
+              className={cn("text-muted-foreground flex-shrink-0 transition-transform", isFieldCheckReportsOpen && "rotate-180")}
+            />
+          </button>
+          {isFieldCheckReportsOpen && (
+            <div className="px-4 pb-4 pt-4 border-t border-border/50">
+              <div className="mb-4">
+                <label htmlFor="field-check-garden-filter" className="text-xs text-muted-foreground mb-2 block">
+                  Bahçe filtresi
+                </label>
+                <Select value={fieldCheckGardenFilter} onValueChange={setFieldCheckGardenFilter}>
+                  <SelectTrigger id="field-check-garden-filter" className="w-full">
+                    <SelectValue placeholder="Tüm bahçeler" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="focus:bg-card data-[state=checked]:bg-transparent">Tüm bahçeler</SelectItem>
+                    {gardens.map(garden => (
+                      <SelectItem key={garden.id} value={garden.id.toString()} className="focus:bg-card data-[state=checked]:bg-transparent">
+                        {garden.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {fieldCheckReportsLoading ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">Yükleniyor...</div>
+              ) : fieldCheckReports.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  Saha kontrol raporu bulunamadı.
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {fieldCheckGardenFilter === "all" ? `${fieldCheckReports.length} rapor` : `Seçili bahçe (${fieldCheckReports.length} rapor)`}
+                  </p>
+                  <div className="mt-2 space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                    {fieldCheckReports.map((r) => {
+                      const garden = gardens.find(g => g.id === r.gardenId);
+                      const isSubmitted = r.status === "SUBMITTED";
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setSelectedFieldCheckReport(r)}
+                          className="w-full flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-left hover:bg-muted transition"
+                        >
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-sm font-medium text-foreground">
+                              {formatDateDisplay(typeof r.date === "string" ? r.date : new Date(r.date as string).toISOString().slice(0, 10))}
+                            </span>
+                            <span className="text-xs text-muted-foreground mt-0.5">
+                              {garden?.name || "Bilinmeyen Bahçe"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 rounded-full text-xs font-medium",
+                                isSubmitted
+                                  ? "bg-primary/10 text-primary border border-primary/30"
+                                  : "bg-muted text-muted-foreground border border-border"
+                              )}
+                            >
+                              {isSubmitted ? "Gönderildi" : "Taslak"}
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* Section: Tuccar Analizi (collapsible) — overflow-visible so X-axis labels are not clipped */}
         <section className="card-elevated overflow-visible">
           <button
@@ -970,6 +1086,12 @@ const Analysis = () => {
       </main>
       
       {/* Inspection Report Modal */}
+      <DailyFieldCheckReportModal
+        open={!!selectedFieldCheckReport}
+        onOpenChange={(open) => !open && setSelectedFieldCheckReport(null)}
+        report={selectedFieldCheckReport}
+        gardenName={selectedFieldCheckReport ? (gardens.find(g => g.id === selectedFieldCheckReport.gardenId)?.name ?? "") : ""}
+      />
       <PreviousInspectionModal
         open={!!selectedInspection}
         onOpenChange={(open) => {
